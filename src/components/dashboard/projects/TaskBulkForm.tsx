@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ProjectsJobState, ZohoProject } from './ProjectsDataTypes';
+import { ProjectsJobState, ZohoProject } from './ProjectsDataTypes'; // Import from DataTypes
 import { Loader2, Play, Pause, Square, ListFilterIcon } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import {
@@ -20,9 +20,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from '@/components/ui/skeleton';
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+// REMOVED the broken import for JobSummary
+
 // --- Types for the Task Layout (from your Postman response) ---
 interface TaskLayoutField {
-    column_name: string; // <-- THIS IS THE KEY WE MUST USE
+    column_name: string;
     display_name: string;
     i18n_display_name: string;
     column_type: string;
@@ -43,16 +57,29 @@ interface TaskLayout {
 }
 // --- END NEW TYPES ---
 
+// --- NEW FORM SCHEMA ---
+const formSchema = z.object({
+  projectId: z.string().min(1, "Project is required."),
+  tasklistId: z.string().min(1, "Task List is required."),
+  
+  // 1. Task Name is now a single string
+  taskName: z.string().min(1, "Task Name is required."),
+  
+  // 2. NEW: Primary Field (the dropdown)
+  primaryField: z.string().min(1, "Primary Field is required."),
+  
+  // 3. NEW: Primary Values (the list)
+  primaryValues: z.string().min(1, "At least one primary value is required."),
 
-interface TaskBulkFormProps {
-  selectedProfileName: string | null;
-  projects: ZohoProject[];
-  socket: Socket | null;
-  jobState: ProjectsJobState;
-  setJobs: React.Dispatch<React.SetStateAction<any>>;
-  autoTaskListId: string | null;
-}
+  taskDescription: z.string().optional(),
+  delay: z.coerce.number().min(0.5, "Delay must be at least 0.5 seconds."),
+  bulkDefaultData: z.record(z.string()).optional(),
+});
 
+type FormValues = z.infer<typeof formSchema>;
+
+// --- ADDED JobSummary COMPONENT BACK IN ---
+// This was inside your original file
 const JobSummary: React.FC<{ jobState: ProjectsJobState }> = ({ jobState }) => {
     const { 
         results,
@@ -88,241 +115,164 @@ const JobSummary: React.FC<{ jobState: ProjectsJobState }> = ({ jobState }) => {
         </div>
     );
 };
+// --- END OF JobSummary COMPONENT ---
 
+
+interface TaskBulkFormProps {
+  jobState: ProjectsJobState;
+  setJobState: React.Dispatch<React.SetStateAction<ProjectsJobState>>; // This should be ProjectsJobState
+  socket: Socket | null;
+  selectedProfileName: string;
+  
+  // Props from parent (ProjectsTasksDashboard)
+  projects: ZohoProject[];
+  tasklists: any[]; // You can use a more specific type
+  layout: TaskLayout | null;
+  isLayoutLoading: boolean;
+  autoProjectId: string;
+  setAutoProjectId: (id: string) => void;
+  autoTaskListId: string | null; // This comes from parent
+  setAutoTaskListId: (id: string) => void; // This comes from parent
+
+  // Job controls from parent
+  isProcessing: boolean;
+  isPaused: boolean;
+  handleStart: (formData: any) => void; // Use 'any' or 'FormValues'
+  handlePause: () => void;
+  handleResume: () => void;
+  handleEnd: () => void;
+  
+  // Need setJobs from parent to update form state
+  setJobs: React.Dispatch<React.SetStateAction<any>>; // Using 'any' as from your original file
+}
 
 export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({ 
-    selectedProfileName, 
-    projects, 
-    socket, 
     jobState, 
-    setJobs, 
-    autoTaskListId 
+    setJobState, // This prop seems unused in your original, but I'll keep it
+    socket, 
+    selectedProfileName,
+    projects,
+    tasklists,
+    layout,
+    isLayoutLoading,
+    autoProjectId,
+    setAutoProjectId,
+    autoTaskListId,
+    setAutoTaskListId,
+    isProcessing,
+    isPaused,
+    handleStart,
+    handlePause,
+    handleResume,
+    handleEnd,
+    setJobs // This is needed for dynamic fields
 }) => {
   const { toast } = useToast();
-  const [projectId, setProjectId] = useState<string>('');
-  const [taskNamesInput, setTaskNamesInput] = useState('');
-  // const [taskDescription, setTaskDescription] = useState(''); // <-- REMOVED
-  const [delay, setDelay] = useState(1);
-  const isProcessing = jobState.isProcessing;
 
-  // --- NEW STATE FOR DYNAMIC FIELDS ---
-  const [taskLayout, setTaskLayout] = useState<TaskLayout | null>(null);
-  const [allFields, setAllFields] = useState<TaskLayoutField[]>([]);
-  const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
-  const [isLoadingLayout, setIsLoadingLayout] = useState(false);
-  const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string>>({});
-  // --- END OF NEW STATE ---
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    // Use the jobState.formData for default values
+    defaultValues: jobState.formData,
+  });
 
+  // Update form default values when jobState changes (e.g., on profile selection)
   useEffect(() => {
-    if (projects.length > 0 && !projectId) {
-      setProjectId(projects[0].id);
+    form.reset(jobState.formData);
+  }, [jobState, form]);
+
+  // Handle auto-selection of project and tasklist
+  useEffect(() => {
+    if (autoProjectId) {
+      form.setValue('projectId', autoProjectId);
     }
-  }, [projects, projectId]);
+  }, [autoProjectId, form]);
 
-  // --- NEW: Effect to listen for layout results ---
   useEffect(() => {
-    if (!socket) return;
+    if (autoTaskListId) {
+      form.setValue('tasklistId', autoTaskListId);
+    }
+  }, [autoTaskListId, form]);
 
-    const handleTaskLayoutResult = (result: { success: boolean; data?: TaskLayout; message?: string; error?: string }) => {
-        setIsLoadingLayout(false);
-        if (result.success && result.data) {
-            setTaskLayout(result.data);
-            
-            // Flatten all fields from all sections
-            const all = result.data.section_details.flatMap(section => section.customfield_details);
-            
-            // Filter out default system fields to keep the list clean
-            const customOnly = all.filter(field => !field.is_default);
-            setAllFields(customOnly);
+  // --- NEW: Generate Primary Field Options ---
+  const primaryFieldOptions = React.useMemo(() => {
+    const options = [
+      // Add Task Name manually
+      { value: 'name', label: 'Task Name' }
+    ];
 
-            // Initialize visibility: show all by default
-            const initialVisibility = customOnly.reduce((acc, field) => {
-                // --- FIX: Use column_name for the key ---
-                acc[field.column_name] = true;
-                return acc;
-            }, {} as Record<string, boolean>);
-            setVisibleFields(initialVisibility);
-
-        } else {
-            toast({ title: 'Error fetching task layout', description: result.message || result.error, variant: 'destructive' });
-            setTaskLayout(null);
-            setAllFields([]);
-        }
-    };
-
-    const handleTaskLayoutError = (error: { message: string }) => {
-        setIsLoadingLayout(false);
-        toast({ title: 'Error fetching layout', description: error.message, variant: 'destructive' });
-    };
-
-    socket.on('projectsTaskLayoutResult', handleTaskLayoutResult);
-    socket.on('projectsTaskLayoutError', handleTaskLayoutError);
-
-    return () => {
-        socket.off('projectsTaskLayoutResult', handleTaskLayoutResult);
-        socket.off('projectsTaskLayoutError', handleTaskLayoutError);
-    };
-  }, [socket, toast]);
-
-  // --- NEW: Effect to fetch layout when project changes ---
-  useEffect(() => {
-    // --- THIS IS THE FIX ---
-    // We must clear the old values *before* checking if we should fetch new ones.
-    setAllFields([]);
-    setTaskLayout(null);
-    setDynamicFieldValues({}); // <-- This clears the "ghost" UDF_CHAR82 value
-    // --- END FIX ---
-
-    if (socket && selectedProfileName && projectId) {
-        setIsLoadingLayout(true);
-        
-        socket.emit('getProjectsTaskLayout', {
-            selectedProfileName,
-            projectId
+    if (layout && layout.section_details) {
+      layout.section_details.forEach(section => {
+        section.customfield_details.forEach(field => {
+          options.push({
+            value: field.column_name, // e.g., "UDF_CHAR82"
+            label: field.display_name // e.g., "email2"
+          });
         });
-    }
-  }, [socket, selectedProfileName, projectId]); // This hook runs when projectId changes
-  // --- END NEW EFFECTS ---
-
-  const handleStart = () => {
-    if (!selectedProfileName || !projectId || !autoTaskListId) {
-      return toast({
-        title: 'Validation Error',
-        description: 'Please select a profile and project. Then, go to "View Tasks" to load a task list.',
-        variant: 'destructive',
       });
     }
-
-    const taskNames = taskNamesInput.split('\n').map(name => name.trim()).filter(name => name.length > 0);
-    
-    if (taskNames.length === 0) {
-        return toast({
-            title: 'Validation Error',
-            description: 'Please enter task names (one per line).',
-            variant: 'destructive',
-        });
-    }
-
-    if (!socket) {
-        return toast({ title: 'Connection Error', description: 'Socket not connected.', variant: 'destructive' });
-    }
-
-    // --- MODIFIED to include bulkDefaultData ---
-    const formData: ProjectsJobState['formData'] = { 
-        taskNames: taskNamesInput, // Send raw string, server will split
-        projectId, 
-        tasklistId: autoTaskListId, 
-        taskDescription: '', // <-- REMOVED (set to empty)
-        delay, 
-        displayName: selectedProfileName,
-        bulkDefaultData: dynamicFieldValues // <-- ADDED DYNAMIC FIELDS
-    };
-
-    setJobs((prevJobs: any) => ({
-      ...prevJobs,
-      [selectedProfileName]: {
-        ...jobState,
-        formData, // <-- Use the new formData object
-        totalToProcess: taskNames.length,
-        isProcessing: true,
-        isPaused: false,
-        isComplete: false,
-        processingStartTime: new Date(),
-        processingTime: 0, 
-        results: [],
-        currentDelay: delay,
-      },
-    }));
-
-    // --- MODIFIED to send all data in one object ---
-    socket.emit('startBulkCreateTasks', {
-        selectedProfileName,
-        taskNames, // Send split array
-        projectId,
-        tasklistId: autoTaskListId,
-        taskDescription: '', // <-- REMOVED (set to empty)
-        delay,
-        bulkDefaultData: dynamicFieldValues // <-- ADDED DYNAMIC FIELDS
-    });
-    // --- END MODIFICATION ---
-    
-    toast({ title: 'Bulk Task Job Started', description: `${taskNames.length} tasks queued.` });
-  };
+    return options;
+  }, [layout]);
   
-  const handlePause = () => {
-    if (socket && selectedProfileName) {
-        socket.emit('pauseJob', { profileName: selectedProfileName, jobType: 'projects' });
-        setJobs((prev: any) => ({
-            ...prev,
-            [selectedProfileName]: { ...prev[selectedProfileName], isPaused: true },
-        }));
-        toast({ title: 'Job Paused' });
-    }
-  };
+  // --- NEW: Watch values for UI updates ---
+  const watchedPrimaryField = form.watch("primaryField");
+  const watchedPrimaryValues = form.watch("primaryValues", "");
 
-  const handleResume = () => {
-    if (socket && selectedProfileName) {
-        socket.emit('resumeJob', { profileName: selectedProfileName, jobType: 'projects' });
-        setJobs((prev: any) => ({
-            ...prev,
-            [selectedProfileName]: { ...prev[selectedProfileName], isPaused: false },
-        }));
-        toast({ title: 'Job Resumed' });
-    }
-  };
-
-  const handleEnd = () => {
-    if (socket && selectedProfileName) {
-        socket.emit('endJob', { profileName: selectedProfileName, jobType: 'projects' });
-        toast({ title: 'Job Stopping' });
-    }
+  const onSubmit = (data: FormValues) => {
+    // Convert delay to number
+    const finalData = {
+      ...data,
+      delay: Number(data.delay),
+      // Make sure bulkDefaultData is an object
+      bulkDefaultData: data.bulkDefaultData || {},
+    };
+    handleStart(finalData);
   };
 
   // --- NEW: Helper to render correct input ---
-  const handleDynamicFieldChange = (columnName: string, value: string) => {
-    // --- FIX: Use column_name as the key ---
-    setDynamicFieldValues(prev => ({ ...prev, [columnName]: value }));
-  };
-
   const renderField = (field: TaskLayoutField) => {
     let inputType = "text";
     if (field.column_type === "date") inputType = "date";
     if (field.column_type === "email") inputType = "email";
     if (field.column_type === "decimal" || field.column_type === "number") inputType = "number";
     
-    // --- FIX: Use column_name as the key ---
-    const fieldKey = field.column_name;
+    const fieldKey = `bulkDefaultData.${field.column_name}`;
 
-    if (field.column_type === "picklist") {
-         // A "smart" version 2 would fetch picklist options.
-         return <Input 
-            placeholder={field.i18n_display_name} 
-            value={dynamicFieldValues[fieldKey] || ''}
-            onChange={(e) => handleDynamicFieldChange(fieldKey, e.target.value)}
-            disabled={isProcessing}
-         />
-    }
-
-    if (field.column_type === "multiline") {
-        return <Textarea 
-            placeholder={field.i18n_display_name} 
-            value={dynamicFieldValues[fieldKey] || ''}
-            onChange={(e) => handleDynamicFieldChange(fieldKey, e.target.value)}
-            disabled={isProcessing}
-        />
-    }
-    
-    return <Input 
-        type={inputType} 
-        placeholder={field.i18n_display_name} 
-        value={dynamicFieldValues[fieldKey] || ''}
-        onChange={(e) => handleDynamicFieldChange(fieldKey, e.target.value)}
-        disabled={isProcessing}
-    />
+    // This component will now be controlled by react-hook-form
+    return (
+      <FormField
+        key={field.column_name}
+        control={form.control}
+        name={fieldKey as any} // Use 'as any' to allow dynamic keys
+        render={({ field: formField }) => (
+          <FormItem className="mt-4">
+            <FormLabel>{field.display_name}</FormLabel>
+            <FormControl>
+              {field.column_type === "multiline" ? (
+                <Textarea
+                  placeholder={`Enter default ${field.display_name}`}
+                  {...formField}
+                  disabled={isProcessing}
+                />
+              ) : (
+                <Input 
+                  type={inputType}
+                  placeholder={`Enter default ${field.display_name}`} 
+                  {...formField}
+                  disabled={isProcessing}
+                />
+              )}
+            </FormControl>
+            <FormDescription>
+              API Key: {field.column_name} (Type: {field.column_type})
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    );
   };
   // --- END NEW HELPER ---
 
-  const isPaused = jobState.isPaused;
 
   return (
     <Card>
@@ -330,7 +280,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         <div className="flex justify-between items-center">
             <CardTitle>Bulk Create Zoho Project Tasks</CardTitle>
             {/* --- NEW: Customize Fields Dropdown --- */}
-            {projectId && (
+            {form.getValues('projectId') && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" disabled={isLoadingLayout || isProcessing}>
@@ -343,20 +293,29 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                         <DropdownMenuSeparator />
                         {isLoadingLayout ? (
                             <DropdownMenuLabel>Loading...</DropdownMenuLabel>
-                        ) : allFields.length > 0 ? (
-                            allFields.map((field) => (
+                        ) : primaryFieldOptions.length > 1 ? ( // Check if layout has loaded
+                            primaryFieldOptions.map((field) => (
+                                // Don't show "Task Name" in this filter list
+                                field.value === 'name' ? null :
                                 <DropdownMenuCheckboxItem
-                                    // --- FIX: Use column_name for the key ---
-                                    key={field.column_name}
-                                    checked={visibleFields[field.column_name] ?? false}
-                                    onCheckedChange={(checked) =>
-                                        setVisibleFields(prev => ({
-                                            ...prev,
-                                            [field.column_name]: !!checked
-                                        }))
-                                    }
+                                    key={field.value}
+                                    // Use form.watch() to get dynamic visibility
+                                    checked={form.watch(`bulkDefaultData.${field.value}`) !== undefined}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        // When checking, set an empty string to make it visible
+                                        form.setValue(`bulkDefaultData.${field.value}`, '');
+                                      } else {
+                                        // When unchecking, remove the field
+                                        const currentData = form.getValues('bulkDefaultData') || {};
+                                        delete currentData[field.value];
+                                        form.setValue('bulkDefaultData', currentData);
+                                        // Manually trigger re-render
+                                        form.trigger('bulkDefaultData'); 
+                                      }
+                                    }}
                                 >
-                                    {field.i18n_display_name || field.display_name}
+                                    {field.label}
                                 </DropdownMenuCheckboxItem>
                             ))
                         ) : (
@@ -368,146 +327,253 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
             {/* --- END NEW DROPDOWN --- */}
         </div>
         <CardDescription>
-            Enter task names (one per line) to be created in the selected project with an optional delay.
+          Create multiple tasks from a list. Select a "Primary Field" (like 'Task Name' or 'email2')
+          and provide a list of values for it.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-4">
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-                <Label htmlFor="projectId">Project</Label>
-                <Select value={projectId} onValueChange={setProjectId} disabled={isProcessing || projects.length === 0}>
-                  <SelectTrigger id="projectId">
-                    <SelectValue placeholder="Select a Project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-            </div>
-            
-            <div className="grid gap-2">
-                <Label htmlFor="tasklistId">Task List ID (Automatic)</Label>
-                <Input
-                    id="tasklistId"
-                    readOnly
-                    value={autoTaskListId || ''}
-                    placeholder="Load 'View Tasks' tab first"
-                    className={!autoTaskListId ? 'border-red-500' : 'bg-muted'}
-                />
-                {!autoTaskListId && (
-                    <p className="text-xs text-red-500">
-                        Go to 'View Tasks' tab to set this.
-                    </p>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Project Select */}
+              <FormField
+                control={form.control}
+                name="projectId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project</FormLabel>
+                    <Select onValueChange={(value) => {
+                      field.onChange(value);
+                      setAutoProjectId(value); // Propagate change up
+                      setAutoTaskListId(''); // Reset tasklist
+                      form.setValue('tasklistId', ''); // Reset form
+                    }} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
                 )}
+              />
+
+              {/* Task List Select */}
+              <FormField
+                control={form.control}
+                name="tasklistId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Task List</FormLabel>
+                    <Select onValueChange={(value) => {
+                      field.onChange(value);
+                      setAutoTaskListId(value); // Propagate change up
+                    }} value={field.value} disabled={!form.getValues('projectId') || tasklists.length === 0}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a task list" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {tasklists.map((list) => (
+                          <SelectItem key={list.id} value={list.id}>
+                            {list.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!autoTaskListId && (
+                      <p className="text-xs text-red-500">
+                          Go to 'View Tasks' tab to set this.
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-          </div>
-          
-          <div className="grid gap-2">
-            <Label htmlFor="taskNamesInput">Task Names (One per line) *</Label>
-            <Textarea
-              id="taskNamesInput"
-              placeholder="Task 1&#10;Task 2&#10;Task 3"
-              rows={8}
-              value={taskNamesInput}
-              onChange={(e) => setTaskNamesInput(e.target.value)}
-              disabled={isProcessing}
+            
+            <hr className="my-4" />
+
+            {/* --- FORM FIELDS UPDATED --- */}
+
+            {/* 1. Task Name (Single Input) */}
+            <FormField
+              control={form.control}
+              name="taskName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Task Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., New Support Ticket" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    If "Task Name" is not the Primary Field, this will be used as a template (e.g., "Task_1", "Task_2").
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          
-          {/* --- FIELD REMOVED --- */}
-          
-          {/* --- NEW: DYNAMIC FIELDS AREA --- */}
-          {isLoadingLayout && (
-              <div className="space-y-4 rounded-md border p-4">
-                  <Label className="text-base font-medium">Custom Fields</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-1/3" />
-                        <Skeleton className="h-9 w-full" />
-                    </div>
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-1/3" />
-                        <Skeleton className="h-9 w-full" />
-                    </div>
-                  </div>
-              </div>
-          )}
-          
-          {!isLoadingLayout && allFields.length > 0 && (
-              <div className="space-y-4 rounded-md border p-4">
-                  <Label className="text-base font-medium">Custom Fields</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {allFields
-                          // --- FIX: Use column_name for the key ---
-                          .filter(field => visibleFields[field.column_name]) // Only show visible
-                          .map(field => (
-                              <div key={field.column_name} className="grid gap-2">
-                                  <Label htmlFor={field.column_name}>{field.i18n_display_name}</Label>
-                                  {renderField(field)}
-                              </div>
-                          ))
-                      }
-                  </div>
-              </div>
-          )}
-          {/* --- END OF DYNAMIC FIELDS AREA --- */}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="delay">Delay Between Tasks (seconds)</Label>
-              <Input
-                id="delay"
-                type="number"
-                min="0"
-                value={delay}
-                onChange={(e) => setDelay(Math.max(0, parseInt(e.target.value)))}
-                disabled={isProcessing}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Tasks in Queue</Label>
-              <Input
-                value={taskNamesInput.split('\n').filter(name => name.trim().length > 0).length}
-                readOnly
-                className="bg-muted"
-              />
-            </div>
-          </div>
+            {/* 2. Primary Field (Dropdown) */}
+            <FormField
+              control={form.control}
+              name="primaryField"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Field (List)</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a field to bulk" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {primaryFieldOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Select the field you want to fill from the list below.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <JobSummary jobState={jobState} />
-          
-          <div className="mt-2 flex space-x-2">
-            {!isProcessing && (
-              <Button onClick={handleStart} className="w-full" disabled={!selectedProfileName || projects.length === 0 || taskNamesInput.trim().length === 0 || !autoTaskListId}>
-                <Play className="mr-2 h-4 w-4" /> Start Bulk Creation
-              </Button>
+            {/* 3. Primary Values (Textarea) */}
+            <FormField
+              control={form.control}
+              name="primaryValues"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Field Values (one per line)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Paste your list here. e.g., a list of emails or task names."
+                      className="min-h-[150px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <hr className="my-4" />
+            
+            {/* Task Description */}
+            <FormField
+              control={form.control}
+              name="taskDescription"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Task Description (Default)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter a default description for all tasks"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Default Custom Fields */}
+            {isLoadingLayout && (
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-1/3" />
+                <Skeleton className="h-10 w-full" />
+              </div>
             )}
             
-            {isProcessing && !isPaused && (
-              <Button onClick={handlePause} className="w-1/2" variant="outline">
-                <Pause className="mr-2 h-4 w-4" /> Pause
-              </Button>
-            )}
+            {layout && layout.section_details.map(section => (
+              <div key={section.section_id}>
+                {section.customfield_details
+                  .filter(field => !field.is_default) // Hide default fields
+                  .map(field => {
+                    // --- NEW: Hide field if it's selected as the primary field
+                    // OR if it's not in the visible list
+                    const isVisible = form.watch(`bulkDefaultData.${field.column_name}`) !== undefined;
+                    if (field.column_name === watchedPrimaryField || !isVisible) {
+                      return null;
+                    }
+                    
+                    // Use renderField to create the component
+                    return renderField(field);
+                  })}
+              </div>
+            ))}
+
+            <hr className="my-4" />
+
+            {/* Delay and Task Count */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="delay"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Delay (in seconds)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0.5" step="0.1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div>
+                <Label>Tasks in Queue</Label>
+                <Input
+                  // --- UPDATED: Use watchedPrimaryValues ---
+                  value={watchedPrimaryValues.split('\n').filter(name => name.trim().length > 0).length}
+                  readOnly
+                  className="bg-muted"
+                />
+              </div>
+            </div>
+
+            <JobSummary jobState={jobState} />
             
-            {isProcessing && isPaused && (
-              <Button onClick={handleResume} className="w-1/2">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resume
-              </Button>
-            )}
-            
-            {isProcessing && (
-              <Button onClick={handleEnd} className="w-1/2" variant="destructive">
-                <Square className="mr-2 h-4 w-4" /> End Job
-              </Button>
-            )}
-          </div>
-        </div>
+            <div className="mt-2 flex space-x-2">
+              {!isProcessing && (
+                <Button type="submit" className="w-full" disabled={!selectedProfileName || projects.length === 0 || watchedPrimaryValues.trim().length === 0 || !autoTaskListId}>
+                  <Play className="mr-2 h-4 w-4" /> Start Bulk Creation
+                </Button>
+              )}
+              
+              {isProcessing && !isPaused && (
+                <Button type="button" onClick={handlePause} className="w-1/2" variant="outline">
+                  <Pause className="mr-2 h-4 w-4" /> Pause
+                </Button>
+              )}
+              
+              {isProcessing && isPaused && (
+                <Button type="button" onClick={handleResume} className="w-1/2">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resume
+                </Button>
+              )}
+              
+              {isProcessing && (
+                <Button type="button" onClick={handleEnd} className="w-1/2" variant="destructive">
+                  <Square className="mr-2 h-4 w-4" /> End Job
+                </Button>
+              )}
+            </div>
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );

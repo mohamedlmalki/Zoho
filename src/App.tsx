@@ -24,14 +24,11 @@ import { EmailResult } from './components/dashboard/catalyst/EmailResultsDisplay
 import BulkQntrlCards from './pages/BulkQntrlCards';
 import PeopleForms from './pages/PeopleForms'; 
 import CreatorForms from './pages/CreatorForms';
-// --- UPDATED IMPORT: Renamed Projects Test Page ---
 import ProjectsTasksPage from './pages/ProjectsTasksPage';
 
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
 
-// ... (All interfaces: TicketFormData, InvoiceFormData, Profile, etc. remain the same) ...
-// (Make sure your Profile interface has the 'projects' property from the last step)
 export interface Profile {
   profileName: string;
   clientId: string;
@@ -65,7 +62,6 @@ export interface Profile {
     portalId: string;
   };
 }
-// ... (All other interfaces remain the same) ...
 export interface TicketFormData {
   emails: string;
   subject: string;
@@ -268,16 +264,18 @@ export interface CreatorJobs {
 }
 
 // --- MODIFIED ProjectsFormData INTERFACE ---
-// This now supports dynamic fields via bulkDefaultData
 export interface ProjectsFormData {
-  taskNames: string; // This will be used as the bulk "primary values"
-  taskDescription: string; // This will be a "default" value
+  taskName: string; // CHANGED: Was taskNames (list), now a single string
+  primaryField: string; // NEW: The column_name of the field to use for bulk, e.g., "name" or "UDF_CHAR82"
+  primaryValues: string; // NEW: The list of values for the primary field
+  
+  taskDescription: string;
   projectId: string;
   tasklistId: string;
   delay: number;
-  bulkDefaultData: { [key: string]: string }; // For all dynamic custom fields
+  bulkDefaultData: { [key: string]: string }; 
   emails?: string; // Dummy property for ExportButton compatibility
-  displayName?: string; // Added for consistency
+  displayName?: string; 
 }
 // --- END OF MODIFICATION ---
 
@@ -289,14 +287,14 @@ export interface ProjectsResult {
   fullResponse?: any;
 }
 export interface ProjectsJobState {
-    formData: ProjectsFormData; // Updated to use new interface
+    formData: ProjectsFormData; 
     results: ProjectsResult[];
     isProcessing: boolean;
     isPaused: boolean;
     isComplete: boolean;
     processingStartTime: Date | null;
     processingTime: number;
-    totalToProcess: number; // This was missing, but it's in your file structure logic
+    totalToProcess: number;
     countdown: number;
     currentDelay: number;
     filterText: string;
@@ -305,8 +303,6 @@ export interface ProjectsJobs {
     [profileName: string]: ProjectsJobState;
 }
 
-
-// ... (All createInitial... functions remain the same) ...
 const createInitialJobState = (): JobState => ({
   formData: {
     emails: '',
@@ -445,16 +441,17 @@ const createInitialCreatorJobState = (): CreatorJobState => ({
 });
 
 // --- MODIFIED createInitialProjectsJobState ---
-// This now initializes the new dynamic structure
 const createInitialProjectsJobState = (): ProjectsJobState => ({
     formData: {
-        taskNames: '',
+        taskName: '', // CHANGED: Was taskNames
+        primaryField: 'name', // NEW: Default to "name"
+        primaryValues: '', // NEW
         taskDescription: '',
         projectId: '',
         tasklistId: '',
         delay: 1,
-        bulkDefaultData: {}, // <-- ADDED
-        emails: '', // Initialize the dummy property
+        bulkDefaultData: {},
+        emails: '', 
     },
     results: [],
     isProcessing: false,
@@ -621,8 +618,6 @@ const MainApp = () => {
           setProjectsJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialProjectsJobState();
             const newResults = [...profileJob.results, result];
-            
-            // Use totalToProcess from the job state to check if it's the last one
             const isLast = newResults.length >= profileJob.totalToProcess;
             
             return {
@@ -689,7 +684,6 @@ const MainApp = () => {
         };
     }, [toast]);
     
-    // ... (handleOpenAddProfile, handleOpenEditProfile, handleSaveProfile, handleDeleteProfile remain the same) ...
     const handleOpenAddProfile = () => {
         setEditingProfile(null);
         setIsProfileModalOpen(true);
@@ -743,7 +737,6 @@ const MainApp = () => {
         <>
             <BrowserRouter>
                 <Routes>
-                    {/* ... (All other routes remain the same) ... */}
                     <Route
                         path="/"
                         element={
@@ -894,11 +887,10 @@ const MainApp = () => {
                         }
                     />
                     
-                    {/* --- UPDATED PROJECTS TASKS ROUTE --- */}
                     <Route
-                        path="/projects-tasks" // New Path
+                        path="/projects-tasks"
                         element={
-                            <ProjectsTasksPage // New Component Name
+                            <ProjectsTasksPage
                                 jobs={projectsJobs}
                                 setJobs={setProjectsJobs}
                                 socket={socketRef.current}
@@ -909,7 +901,6 @@ const MainApp = () => {
                             />
                         }
                     />
-                    {/* --- END OF UPDATED BLOCK --- */}
 
 
                     <Route path="*" element={<NotFound />} />
