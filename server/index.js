@@ -1,4 +1,4 @@
-// --- FILE: server/index.js (FINAL CODE WITH EXHAUSTIVE SCOPES) ---
+// --- FILE: server/index.js (FULL CODE) ---
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -185,7 +185,17 @@ app.post('/api/catalyst/single', async (req, res) => {
 // --- NEW REST ENDPOINT FOR PROJECTS ---
 app.post('/api/projects/tasks/single', async (req, res) => {
     try {
-        const result = await projectsHandler.handleCreateSingleTask(req.body);
+        const { formData, selectedProfileName } = req.body;
+        const profiles = readProfiles();
+        const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
+
+        const result = await projectsHandler.handleCreateSingleTask({
+            ...formData, // contains projectId, tasklistId, taskNameS (as taskName), taskDescription
+            taskName: formData.taskNames, // handle single name
+            portalId: activeProfile?.projects?.portalId,
+            selectedProfileName,
+            bulkDefaultData: formData.bulkDefaultData || {} // <-- Pass dynamic fields
+        });
         res.json(result);
     } catch (error) {
         res.status(500).json({ success: false, error: 'An unexpected server error occurred during single task creation.' });
@@ -356,7 +366,6 @@ io.on('connection', (socket) => {
                 const portalResponse = await makeApiCall('get', `/portal/${portalId}`, null, activeProfile, 'projects');
                 
                 validationData = { 
-                    // --- FINAL FIX: Changed 'portal.name' to 'portal_details.name' ---
                     orgName: `Portal: ${portalResponse.data.portal_details.name}`,
                     agentInfo: { 
                         firstName: `Portal Owner`, // Info is not readily available here, just confirming connection
@@ -487,7 +496,7 @@ io.on('connection', (socket) => {
         'startBulkInsertPeopleRecords': peopleHandler.handleStartBulkInsertRecords,
     };
 
-    for (const [event, handler] of Object.entries(peopleListeners)) {
+    for (const [event, handler]of Object.entries(peopleListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
@@ -524,14 +533,16 @@ io.on('connection', (socket) => {
         });
     }
 
-    // --- UPDATED: Zoho Projects Listeners ---
+    // --- MODIFIED: Zoho Projects Listeners ---
     const projectsListeners = {
         'getProjectsPortals': projectsHandler.handleGetPortals, 
         'getProjectsProjects': projectsHandler.handleGetProjects,
-        'getProjectsTaskDetails': projectsHandler.handleGetTaskDetails,
+        'getProjectsTaskLists': projectsHandler.handleGetTaskLists, // Matches your handler
         'getProjectsTasks': projectsHandler.handleGetTasks,
         'startBulkCreateTasks': projectsHandler.handleStartBulkCreateTasks,
+        'getProjectsTaskLayout': projectsHandler.handleGetTaskLayout, // <-- ADDED NEW LISTENER
     };
+    // --- END MODIFICATION ---
 
     for (const [event, handler] of Object.entries(projectsListeners)) {
         socket.on(event, (data) => {
@@ -539,13 +550,20 @@ io.on('connection', (socket) => {
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
             if (activeProfile) {
                 if (typeof handler === 'function') {
+                    // Pass the activeProfile to the handler
                     handler(socket, { ...data, activeProfile });
                 } else {
                     console.error(`[ERROR] Handler for event '${event}' is not a function.`);
                     socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
                 }
             } else {
-                socket.emit('bulkError', { message: 'Active profile not found.' });
+                 // Emit error if profile not found, except for portal fetch which uses temp credentials
+                 if(event !== 'getProjectsPortals') {
+                    socket.emit('bulkError', { message: 'Active profile not found.' });
+                 } else {
+                    // For getProjectsPortals, the handler creates its own temp profile
+                    handler(socket, data);
+                 }
             }
         });
     }

@@ -1,4 +1,4 @@
-// --- FILE: src/App.tsx (COMPLETE) ---
+// --- FILE: src/App.tsx (FULL CODE) ---
 import React, { useState, useEffect, useRef } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -267,18 +267,19 @@ export interface CreatorJobs {
     [profileName: string]: CreatorJobState;
 }
 
-// --- FIX: UPDATED INTERFACE ---
-// We are defining the form fields specifically and adding a dummy 'emails'
-// property to prevent crashes with the generic ExportButton component.
+// --- MODIFIED ProjectsFormData INTERFACE ---
+// This now supports dynamic fields via bulkDefaultData
 export interface ProjectsFormData {
-  taskNames: string;
-  taskDescription: string;
+  taskNames: string; // This will be used as the bulk "primary values"
+  taskDescription: string; // This will be a "default" value
   projectId: string;
   tasklistId: string;
   delay: number;
-  emails?: string; // This is the dummy property to ensure compatibility
+  bulkDefaultData: { [key: string]: string }; // For all dynamic custom fields
+  emails?: string; // Dummy property for ExportButton compatibility
+  displayName?: string; // Added for consistency
 }
-// --- END OF FIX ---
+// --- END OF MODIFICATION ---
 
 export interface ProjectsResult {
   projectName: string; 
@@ -288,14 +289,14 @@ export interface ProjectsResult {
   fullResponse?: any;
 }
 export interface ProjectsJobState {
-    formData: ProjectsFormData; // Updated from [key: string]: any
+    formData: ProjectsFormData; // Updated to use new interface
     results: ProjectsResult[];
     isProcessing: boolean;
     isPaused: boolean;
     isComplete: boolean;
     processingStartTime: Date | null;
     processingTime: number;
-    totalToProcess: number;
+    totalToProcess: number; // This was missing, but it's in your file structure logic
     countdown: number;
     currentDelay: number;
     filterText: string;
@@ -443,9 +444,8 @@ const createInitialCreatorJobState = (): CreatorJobState => ({
     filterText: '',
 });
 
-// --- FIX: UPDATED INITIAL STATE ---
-// We are initializing the formData with all its properties, just like
-// all the other createInitial... functions. This stops the crash.
+// --- MODIFIED createInitialProjectsJobState ---
+// This now initializes the new dynamic structure
 const createInitialProjectsJobState = (): ProjectsJobState => ({
     formData: {
         taskNames: '',
@@ -453,6 +453,7 @@ const createInitialProjectsJobState = (): ProjectsJobState => ({
         projectId: '',
         tasklistId: '',
         delay: 1,
+        bulkDefaultData: {}, // <-- ADDED
         emails: '', // Initialize the dummy property
     },
     results: [],
@@ -466,7 +467,7 @@ const createInitialProjectsJobState = (): ProjectsJobState => ({
     currentDelay: 1,
     filterText: '',
 });
-// --- END OF FIX ---
+// --- END OF MODIFICATION ---
 
 
 const MainApp = () => {
@@ -478,7 +479,7 @@ const MainApp = () => {
     const [qntrlJobs, setQntrlJobs] = useState<QntrlJobs>({});
     const [peopleJobs, setPeopleJobs] = useState<PeopleJobs>({});
     const [creatorJobs, setCreatorJobs] = useState<CreatorJobs>({});
-    const [projectsJobs, setProjectsJobs] = useState<ProjectsJobs>({}); // State is here for when you build the real job page
+    const [projectsJobs, setProjectsJobs] = useState<ProjectsJobs>({});
     const socketRef = useRef<Socket | null>(null);
     const queryClient = useQueryClient();
 
@@ -502,7 +503,6 @@ const MainApp = () => {
             toast({ title: "Connected to server!" });
         });
         
-        // ... (all other socket listeners 'ticketResult', 'projectsResult', etc. remain the same) ...
         socket.on('ticketResult', (result: TicketResult & { profileName: string }) => {
           setJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialJobState();
@@ -616,16 +616,21 @@ const MainApp = () => {
             };
           });
         });
+        
         socket.on('projectsResult', (result: ProjectsResult & { profileName: string }) => {
           setProjectsJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialProjectsJobState();
-            const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            const newResults = [...profileJob.results, result];
+            
+            // Use totalToProcess from the job state to check if it's the last one
+            const isLast = newResults.length >= profileJob.totalToProcess;
+            
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
-                countdown: isLast ? 0 : profileJob.currentDelay,
+                results: newResults,
+                countdown: isLast ? 0 : profileJob.currentDelay, 
               }
             };
           });

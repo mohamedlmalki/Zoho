@@ -1,6 +1,8 @@
-// --- FILE: server/projects-handler.js (FIXED) ---
+// --- FILE: server/projects-handler.js (FULL CODE - FINAL FIX) ---
 
 const { getValidAccessToken, makeApiCall, parseError, createJobId, readProfiles } = require('./utils');
+const { delay } = require('./utils'); // Assuming delay is in utils, based on your original file
+const axios = require('axios'); 
 
 let activeJobs = {};
 
@@ -8,7 +10,7 @@ const setActiveJobs = (jobs) => {
     activeJobs = jobs;
 };
 
-// --- Utility function for job control ---
+// --- Utility function for job control (from your file, UNCHANGED) ---
 const interruptibleSleep = (ms, jobId) => {
     return new Promise(resolve => {
         if (ms <= 0) return resolve();
@@ -32,6 +34,7 @@ const interruptibleSleep = (ms, jobId) => {
  * Fetches Zoho Projects portals using temporary credentials.
  */
 const handleGetPortals = async (socket, data) => {
+    console.log('[SERVER LOG] handleGetPortals triggered.'); 
     const { clientId, clientSecret, refreshToken } = data;
 
     const tempProfile = {
@@ -44,6 +47,7 @@ const handleGetPortals = async (socket, data) => {
 
     try {
         await getValidAccessToken(tempProfile, 'projects');
+        // YOUR WORKING PATH (UNCHANGED)
         const response = await makeApiCall('get', '/portals', null, tempProfile, 'projects');
 
         if (Array.isArray(response.data) && response.data.length > 0) {
@@ -61,15 +65,19 @@ const handleGetPortals = async (socket, data) => {
  * Retrieves projects for a given portal ID.
  */
 const handleGetProjects = async (socket, data) => {
+    console.log('[SERVER LOG] handleGetProjects triggered.'); 
     const { activeProfile } = data;
     const portalId = activeProfile.projects?.portalId;
     
     if (!portalId) {
+        console.log('[SERVER LOG] Error: Portal ID is missing from profile.');
         return socket.emit('projectsProjectsResult', { success: false, error: 'Portal ID is missing from profile.', data: [] });
     }
 
     try {
+        // --- YOUR WORKING PATH (UNCHANGED) ---
         const path = `/portal/${portalId}/projects`;
+        console.log(`[SERVER LOG] Making API call to: ${path}`);
         const response = await makeApiCall('get', path, null, activeProfile, 'projects');
 
         const projects = Array.isArray(response.data) ? response.data : (response.data.projects || []); 
@@ -94,16 +102,20 @@ const handleGetProjects = async (socket, data) => {
  * Retrieves task lists for a given project.
  */
 const handleGetTaskLists = async (socket, data) => {
+    console.log('[SERVER LOG] handleGetTaskLists triggered.'); 
     const { activeProfile, projectId } = data;
     const portalId = activeProfile.projects?.portalId;
     
     if (!portalId) {
+        console.log('[SERVER LOG] Error: Portal ID is missing.');
         return socket.emit('projectsTaskListsResult', { success: false, error: 'Portal ID is missing.', data: [] });
     }
 
     try {
+        // --- YOUR WORKING PATH (UNCHANGED) ---
         const path = `/portal/${portalId}/all-tasklists`;
         const queryParams = projectId ? { project_id: projectId } : {};
+        console.log(`[SERVER LOG] Making API call to: ${path} with params:`, queryParams);
         const response = await makeApiCall('get', path, null, activeProfile, 'projects', queryParams);
 
         const taskLists = response.data.tasklists || [];
@@ -130,10 +142,12 @@ const handleGetTaskLists = async (socket, data) => {
  * Retrieves tasks for a given portal.
  */
 const handleGetTasks = async (socket, data) => {
+    console.log('[SERVER LOG] handleGetTasks triggered.'); 
     const { activeProfile, queryParams = {} } = data;
     const portalId = activeProfile.projects?.portalId;
     
     if (!portalId) {
+        console.log('[SERVER LOG] Error: Portal ID is not configured.');
         return socket.emit('projectsTasksResult', { 
             success: false, 
             error: 'Portal ID is not configured for this profile.', 
@@ -142,7 +156,9 @@ const handleGetTasks = async (socket, data) => {
     }
 
     try {
+        // --- YOUR WORKING PATH (UNCHANGED) ---
         const path = `/portal/${portalId}/tasks`;
+        console.log(`[SERVER LOG] Making API call to: ${path} with params:`, queryParams);
         
         const response = await makeApiCall('get', path, null, activeProfile, 'projects', queryParams);
 
@@ -170,7 +186,8 @@ const handleGetTasks = async (socket, data) => {
  * Creates a single task. (Used by REST endpoint and internally by bulk handler)
  */
 const handleCreateSingleTask = async (data) => {
-    const { portalId, projectId, taskName, taskDescription, tasklistId, selectedProfileName } = data; 
+    // --- MODIFIED to accept bulkDefaultData ---
+    const { portalId, projectId, taskName, taskDescription, tasklistId, selectedProfileName, bulkDefaultData } = data; 
     
     const profiles = readProfiles();
     const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
@@ -180,36 +197,49 @@ const handleCreateSingleTask = async (data) => {
     }
 
     try {
+        // --- YOUR WORKING PATH (UNCHANGED) ---
         const path = `/portal/${portalId}/projects/${projectId}/tasks`;
         
-        // --- FIX #1: Send a single task object, not an array ---
+        // --- THIS IS THE FIX ---
+        // Start with the base task data
         const taskData = {
             name: taskName,
-            description: taskDescription,
             tasklist: {
                 id: tasklistId
             }
         };
-        // --- END FIX #1 ---
 
+        // Only add description if it's not empty
+        if (taskDescription) {
+            taskData.description = taskDescription;
+        }
+
+        // Add custom fields from bulkDefaultData directly to the taskData object
+        if (bulkDefaultData && Object.keys(bulkDefaultData).length > 0) {
+            for (const [key, value] of Object.entries(bulkDefaultData)) {
+                if (value) { // Only add fields that have a value
+                    // This will add "UDF_CHAR82": "your-value" to the top level
+                    taskData[key] = value;
+                }
+            }
+            console.log(`[SERVER LOG] Task '${taskName}' submitting with top-level custom fields:`, bulkDefaultData);
+        }
+        // --- END FIX ---
+        
+        console.log(`[SERVER LOG] Sending final task payload to ${path}:`, JSON.stringify(taskData));
         const response = await makeApiCall('post', path, taskData, activeProfile, 'projects');
         
-        // --- FIX #2: Check for the direct task object in the response ---
         let newTask;
         if (response.data && response.data.id && response.data.name) {
-            // This is the direct task object response (for single create)
-            // This is the format you showed in your first successful response
             newTask = response.data;
         } else if (response.data.tasks && Array.isArray(response.data.tasks)) {
-            // This is the bulk create response (which some endpoints use)
             newTask = response.data.tasks[0];
         }
-        // --- END FIX #2 ---
 
-        if (newTask) { // This will now be true
+        if (newTask) {
             return { 
                 success: true, 
-                fullResponse: newTask, // This will now send the correct task object
+                fullResponse: newTask, 
                 message: `Task "${newTask.name}" created successfully.`,
                 taskId: newTask.id,
                 taskPrefix: newTask.prefix,
@@ -217,7 +247,7 @@ const handleCreateSingleTask = async (data) => {
         } else {
              return { 
                 success: false, 
-                error: 'Task creation failed, API response was not in the expected format.', // Updated error
+                error: 'Task creation failed, API response was not in the expected format.',
                 fullResponse: response.data,
             };
         }
@@ -232,7 +262,8 @@ const handleCreateSingleTask = async (data) => {
  * Handles bulk creation of tasks from a list of names.
  */
 const handleStartBulkCreateTasks = async (socket, data) => {
-    const { taskNames, projectId, taskDescription, tasklistId, delay, selectedProfileName, activeProfile } = data;
+    // --- MODIFIED to accept bulkDefaultData ---
+    const { taskNames, projectId, taskDescription, tasklistId, delay, selectedProfileName, activeProfile, bulkDefaultData } = data;
     
     console.log(`[PROJECTS JOB START] Profile: ${selectedProfileName}. Project ID: ${projectId}. TaskList ID: ${tasklistId}. Tasks Queued: ${taskNames.length}`);
 
@@ -268,6 +299,7 @@ const handleStartBulkCreateTasks = async (socket, data) => {
             
             console.log(`[PROJECTS JOB] Processing Task ${i + 1}/${tasksToProcess.length}: ${taskName}`);
             
+            // --- MODIFIED to pass bulkDefaultData ---
             const result = await handleCreateSingleTask({
                 portalId,
                 projectId,
@@ -275,12 +307,13 @@ const handleStartBulkCreateTasks = async (socket, data) => {
                 taskDescription,
                 tasklistId,
                 selectedProfileName,
+                bulkDefaultData // Pass the dynamic fields
             });
 
             if (result.success) {
                 console.log(`[PROJECTS JOB SUCCESS] Emitting result for: ${taskName}. Task Prefix: ${result.taskPrefix}`);
                 socket.emit('projectsResult', { 
-                    projectName: taskName, // Using name as the key
+                    projectName: taskName,
                     success: true,
                     details: result.message,
                     fullResponse: result.fullResponse,
@@ -317,6 +350,75 @@ const handleStartBulkCreateTasks = async (socket, data) => {
 };
 
 
+// --- WORKING GET TASK LAYOUT FUNCTION (UNCHANGED) ---
+const handleGetTaskLayout = async (socket, data) => {
+    console.log('[SERVER LOG] handleGetTaskLayout triggered.');
+    const { activeProfile, projectId } = data;
+    const portalId = activeProfile.projects?.portalId;
+    
+    if (!portalId) {
+        console.log('[SERVER LOG] Error: Portal ID is missing from profile.');
+        return socket.emit('projectsTaskLayoutResult', { success: false, error: 'Portal ID is missing from profile.' });
+    }
+    if (!projectId) {
+        console.log('[SERVER LOG] Error: Project ID not provided.');
+        return socket.emit('projectsTaskLayoutResult', { success: false, error: 'Project ID not provided.' });
+    }
+
+    try {
+        // Step 1: Get JUST the token.
+        const { access_token } = await getValidAccessToken(activeProfile, 'projects');
+        
+        // Step 2: Manually build the correct URL from your Postman test
+        const domain = 'https://projectsapi.zoho.com'; // Hard-coded correct domain
+        // --- REMOVED THE TRAILING SLASH ---
+        const apiUrl = `${domain}/restapi/portal/${portalId}/projects/${projectId}/tasklayouts`;
+        
+        console.log(`[SERVER LOG] Bypassing makeApiCall. Manually calling: ${apiUrl}`);
+
+        // Step 3: Make a direct axios call with the correct URL and token
+        const response = await axios.get(apiUrl, {
+            headers: {
+                'Authorization': `Zoho-oauthtoken ${access_token}`
+            }
+        });
+        
+        // The response you posted is the layout object itself
+        const layout = response.data; 
+
+        if (!layout || !layout.layout_id) {
+             console.log('[SERVER LOG] Error: No task layout found in response.');
+             throw new Error('No task layout found for this project.');
+        }
+
+        console.log(`[SERVER LOG] Successfully fetched layout: ${layout.layout_id}`);
+        socket.emit('projectsTaskLayoutResult', { 
+            success: true, 
+            data: layout, // Send the layout object
+        });
+
+    } catch (error) {
+        // Manually parse the error since we aren't using parseError
+        console.error('[SERVER LOG] Error in manual axios call for task layout:', error.message);
+        let message = error.message;
+        let fullResponse = null;
+        if (error.response) {
+            // Log the detailed error from Zoho
+            console.error('[SERVER LOG] Zoho API Error Details:', JSON.stringify(error.response.data));
+            message = error.response.data?.error?.details?.[0]?.message || error.response.data?.message || error.response.data?.error?.message || error.message;
+            fullResponse = error.response.data;
+        }
+        
+        socket.emit('projectsTaskLayoutResult', { 
+            success: false, 
+            error: message,
+            fullResponse: fullResponse,
+        });
+    }
+};
+// --- END OF FUNCTION ---
+
+
 module.exports = {
     setActiveJobs,
     handleGetPortals,
@@ -325,4 +427,5 @@ module.exports = {
     handleGetTasks,
     handleCreateSingleTask,
     handleStartBulkCreateTasks,
+    handleGetTaskLayout, 
 };
