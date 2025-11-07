@@ -1,4 +1,4 @@
-// --- FILE: src/pages/ProjectsTasksPage.tsx (NO CHANGES) ---
+// --- FILE: src/pages/ProjectsTasksPage.tsx (FIXED) ---
 import React from 'react';
 import { Socket } from 'socket.io-client';
 import { Profile, ProjectsJobs, ProjectsJobState } from '@/App';

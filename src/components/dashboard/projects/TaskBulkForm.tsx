@@ -1,428 +1,292 @@
-// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (CORRECTED) ---
-
+// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (FIXED) ---
 import React, { useState, useEffect } from 'react';
-import { Socket } from 'socket.io-client';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Info, Loader2, Play, Pause, Square, Search, X } from 'lucide-react';
-import { Profile } from '@/App';
-import {
-  ProjectsJobs,
-  ProjectsJobState,
-  ZohoProject,
-  ZohoTaskList,
-  ProjectCustomField,
-} from './ProjectsDataTypes';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { ProjectsJobState, ZohoProject } from './ProjectsDataTypes';
+import { Loader2, Play, Pause, Square } from 'lucide-react';
+import { Socket } from 'socket.io-client';
+// --- REMOVED date-fns import, we will use jobState.processingTime ---
 
 interface TaskBulkFormProps {
   selectedProfileName: string | null;
-  activeProfile: Profile | null;
   projects: ZohoProject[];
   socket: Socket | null;
-  jobState?: ProjectsJobState; 
-  setJobs: React.Dispatch<React.SetStateAction<ProjectsJobs>>;
+  jobState: ProjectsJobState;
+  setJobs: React.Dispatch<React.SetStateAction<any>>;
   autoTaskListId: string | null;
-  customFields: ProjectCustomField[];
-  isLoadingCustomFields: boolean;
 }
 
-const createInitialJobState = (): ProjectsJobState => ({
-  formData: {
-    taskNames: '',
-    taskDescription: '',
-    projectId: '',
-    tasklistId: '',
-    delay: 1,
-    emails: '',
-    custom_fields: {},
-  },
-  results: [],
-  isProcessing: false,
-  isPaused: false,
-  isComplete: false,
-  processingStartTime: null,
-  processingTime: 0,
-  totalToProcess: 0,
-  countdown: 0,
-  currentDelay: 1,
-  filterText: '',
-});
+// --- NEW JobSummary component (small, as requested) ---
+const JobSummary: React.FC<{ jobState: ProjectsJobState }> = ({ jobState }) => {
+    const { 
+        results,
+        processingTime, // <-- Using the timer from the hook
+        isProcessing, 
+        isComplete 
+    } = jobState;
+    
+    // Don't show if job hasn't started
+    if (!isProcessing && !isComplete) {
+        return null;
+    }
 
-export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
-  selectedProfileName,
-  activeProfile,
-  projects = [],
-  socket,
-  jobState = createInitialJobState(),
-  setJobs,
-  autoTaskListId,
-  customFields = [],
-  isLoadingCustomFields,
+    const successCount = results.filter(r => r.success).length;
+    const errorCount = results.length - successCount;
+    
+    // This uses the pausable timer, starting from 0, as you requested
+    const elapsedTime = `${processingTime} s`; 
+
+    return (
+        <div className="grid grid-cols-3 gap-4 text-center my-4">
+            <div className="rounded-md border p-2">
+                <p className="text-xl font-bold text-green-600">{successCount}</p>
+                <p className="text-xs text-muted-foreground">Success</p>
+            </div>
+            <div className="rounded-md border p-2">
+                <p className="text-xl font-bold text-red-600">{errorCount}</p>
+                <p className="text-xs text-muted-foreground">Errors</p>
+            </div>
+            <div className="rounded-md border p-2">
+                <p className="text-xl font-bold text-primary">
+                    {elapsedTime}
+                </p>
+                <p className="text-xs text-muted-foreground">Time Elapsed</p>
+            </div>
+        </div>
+    );
+};
+// --- END NEW COMPONENT ---
+
+
+export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({ 
+    selectedProfileName, 
+    projects, 
+    socket, 
+    jobState, 
+    setJobs, 
+    autoTaskListId 
 }) => {
   const { toast } = useToast();
-  const { formData, isProcessing, isPaused } = jobState;
+  const [projectId, setProjectId] = useState<string>('');
+  const [taskNamesInput, setTaskNamesInput] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [delay, setDelay] = useState(1);
+  const isProcessing = jobState.isProcessing;
 
-  const [taskLists, setTaskLists] = useState<ZohoTaskList[]>([]);
-  const [isLoadingTaskLists, setIsLoadingTaskLists] = useState(false);
-  const [isProjectPopoverOpen, setIsProjectPopoverOpen] = useState(false);
-  const [isTaskListPopoverOpen, setIsTaskListPopoverOpen] = useState(false);
-
-  const [localCustomFields, setLocalCustomFields] = useState<{ [key: string]: any }>(formData.custom_fields || {});
-
-  const onFormDataChange = (newFormData: ProjectsJobState['formData']) => {
-    if (selectedProfileName) {
-      setJobs((prevJobs) => ({
-        ...prevJobs,
-        [selectedProfileName]: {
-          ...(prevJobs[selectedProfileName] || createInitialJobState()), 
-          formData: newFormData,
-        },
-      }));
+  useEffect(() => {
+    if (projects.length > 0 && !projectId) {
+      setProjectId(projects[0].id);
     }
-  };
+  }, [projects, projectId]);
 
-  useEffect(() => {
-    setLocalCustomFields(formData.custom_fields || {});
-  }, [formData.custom_fields]);
-
-  useEffect(() => {
-    if (socket && formData.projectId) {
-      setIsLoadingTaskLists(true);
-      socket.emit('getProjectsTaskLists', {
-        selectedProfileName: selectedProfileName,
-        activeProfile: activeProfile,
-        projectId: formData.projectId,
+  const handleStart = () => {
+    if (!selectedProfileName || !projectId || !autoTaskListId) {
+      return toast({
+        title: 'Validation Error',
+        description: 'Please select a profile and project. Then, go to "View Tasks" to load a task list.',
+        variant: 'destructive',
       });
-
-      const handleTaskListsResult = (result: { success: boolean; data?: ZohoTaskList[]; error?: string }) => {
-        setIsLoadingTaskLists(false);
-        if (result.success && result.data) {
-          setTaskLists(result.data);
-        } else {
-          setTaskLists([]);
-          toast({ title: 'Error Fetching Task Lists', description: result.error || "Received invalid task list data.", variant: 'destructive' });
-        }
-      };
-
-      socket.on('projectsTaskListsResult', handleTaskListsResult);
-      return () => {
-        socket.off('projectsTaskListsResult', handleTaskListsResult);
-      };
-    } else {
-      setTaskLists([]);
     }
-  }, [socket, formData.projectId, selectedProfileName, activeProfile, toast]);
 
-  useEffect(() => {
-    if (autoTaskListId && taskLists.some(tl => tl.id_string === autoTaskListId)) {
-        if (formData.tasklistId !== autoTaskListId) {
-            onFormDataChange({ ...formData, tasklistId: autoTaskListId });
-        }
+    const taskNames = taskNamesInput.split('\n').map(name => name.trim()).filter(name => name.length > 0);
+    
+    if (taskNames.length === 0) {
+        return toast({
+            title: 'Validation Error',
+            description: 'Please enter task names (one per line).',
+            variant: 'destructive',
+        });
     }
-  }, [autoTaskListId, taskLists, formData, onFormDataChange]);
 
-  const handleProjectSelect = (projectId: string) => {
-    onFormDataChange({ ...formData, projectId: projectId, tasklistId: '' });
-    setIsProjectPopoverOpen(false);
+    if (!socket) {
+        return toast({ title: 'Connection Error', description: 'Socket not connected.', variant: 'destructive' });
+    }
+
+    setJobs((prevJobs: any) => ({
+      ...prevJobs,
+      [selectedProfileName]: {
+        ...jobState,
+        formData: { taskNames, projectId, tasklistId: autoTaskListId, taskDescription, delay, displayName: selectedProfileName },
+        totalToProcess: taskNames.length,
+        isProcessing: true,
+        isPaused: false,
+        isComplete: false,
+        processingStartTime: new Date(),
+        processingTime: 0, // <-- Reset timer to 0
+        results: [],
+        currentDelay: delay,
+      },
+    }));
+
+    socket.emit('startBulkCreateTasks', {
+        selectedProfileName,
+        taskNames,
+        projectId,
+        tasklistId: autoTaskListId,
+        taskDescription,
+        delay,
+    });
+    
+    toast({ title: 'Bulk Task Job Started', description: `${taskNames.length} tasks queued.` });
+  };
+  
+  const handlePause = () => {
+    if (socket && selectedProfileName) {
+        socket.emit('pauseJob', { profileName: selectedProfileName, jobType: 'projects' });
+        setJobs((prev: any) => ({
+            ...prev,
+            [selectedProfileName]: { ...prev[selectedProfileName], isPaused: true },
+        }));
+        toast({ title: 'Job Paused' });
+    }
   };
 
-  const handleTaskListSelect = (taskListId: string) => {
-    onFormDataChange({ ...formData, tasklistId: taskListId });
-    setIsTaskListPopoverOpen(false);
+  const handleResume = () => {
+    if (socket && selectedProfileName) {
+        socket.emit('resumeJob', { profileName: selectedProfileName, jobType: 'projects' });
+        setJobs((prev: any) => ({
+            ...prev,
+            [selectedProfileName]: { ...prev[selectedProfileName], isPaused: false },
+        }));
+        toast({ title: 'Job Resumed' });
+    }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    onFormDataChange({ ...formData, [e.target.id]: e.target.value });
+  const handleEnd = () => {
+    if (socket && selectedProfileName) {
+        socket.emit('endJob', { profileName: selectedProfileName, jobType: 'projects' });
+        toast({ title: 'Job Stopping' });
+    }
   };
 
-  const handleCustomFieldChange = (field_id: string, value: any) => {
-    const newCustomFields = {
-      ...localCustomFields,
-      [field_id]: value,
-    };
-    setLocalCustomFields(newCustomFields);
-    onFormDataChange({ ...formData, custom_fields: newCustomFields });
-  };
-
-  const selectedProject = projects.find(p => p.id_string === formData.projectId);
-  const selectedTaskList = taskLists.find(tl => tl.id_string === formData.tasklistId);
+  const isPaused = jobState.isPaused;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Bulk Create Tasks</CardTitle>
+        <CardTitle>Bulk Create Zoho Project Tasks</CardTitle>
         <CardDescription>
-          Enter multiple task names (one per line) and default settings to create them in bulk.
+            Enter task names (one per line) to be created in the selected project with an optional delay.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="taskNames">Task Names (one per line)</Label>
+      <CardContent>
+        <div className="grid gap-4">
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+                <Label htmlFor="projectId">Project</Label>
+                <Select value={projectId} onValueChange={setProjectId} disabled={isProcessing || projects.length === 0}>
+                  <SelectTrigger id="projectId">
+                    <SelectValue placeholder="Select a Project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+            </div>
+            
+            <div className="grid gap-2">
+                <Label htmlFor="tasklistId">Task List ID (Automatic)</Label>
+                <Input
+                    id="tasklistId"
+                    readOnly
+                    value={autoTaskListId || ''}
+                    placeholder="Load 'View Tasks' tab first"
+                    className={!autoTaskListId ? 'border-red-500' : 'bg-muted'}
+                />
+                {!autoTaskListId && (
+                    <p className="text-xs text-red-500">
+                        Go to 'View Tasks' tab to set this.
+                    </p>
+                )}
+            </div>
+          </div>
+          
+          <div className="grid gap-2">
+            <Label htmlFor="taskNamesInput">Task Names (One per line) *</Label>
             <Textarea
-              id="taskNames"
+              id="taskNamesInput"
               placeholder="Task 1&#10;Task 2&#10;Task 3"
-              value={formData.taskNames}
-              onChange={handleInputChange}
-              rows={10}
+              rows={8}
+              value={taskNamesInput}
+              onChange={(e) => setTaskNamesInput(e.target.value)}
               disabled={isProcessing}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="taskDescription">Default Task Description</Label>
+          
+          <div className="grid gap-2">
+            <Label htmlFor="taskDescription">Default Description (Optional)</Label>
             <Textarea
               id="taskDescription"
-              placeholder="Default description for all tasks..."
-              value={formData.taskDescription}
-              onChange={handleInputChange}
-              rows={10}
+              placeholder="Enter a description for all tasks"
+              value={taskDescription}
+              onChange={(e) => setTaskDescription(e.target.value)}
               disabled={isProcessing}
             />
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Project</Label>
-            <Popover open={isProjectPopoverOpen} onOpenChange={setIsProjectPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isProcessing}>
-                  {selectedProject ? (
-                    <span className="truncate">{selectedProject.name}</span>
-                  ) : (
-                    'Select a project'
-                  )}
-                  <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                <Command>
-                  <CommandInput placeholder="Search projects..." />
-                  <CommandEmpty>No project found.</CommandEmpty>
-                  <CommandList>
-                    {projects.map(project => (
-                      <CommandItem
-                        key={project.id_string}
-                        value={project.name}
-                        onSelect={() => handleProjectSelect(project.id_string)}
-                      >
-                        {project.name}
-                      </CommandItem>
-                    ))}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="delay">Delay Between Tasks (seconds)</Label>
+              <Input
+                id="delay"
+                type="number"
+                min="0"
+                value={delay}
+                onChange={(e) => setDelay(Math.max(0, parseInt(e.target.value)))}
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Tasks in Queue</Label>
+              <Input
+                value={taskNamesInput.split('\n').filter(name => name.trim().length > 0).length}
+                readOnly
+                className="bg-muted"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Task List {isLoadingTaskLists && <Loader2 className="h-4 w-4 animate-spin inline-block ml-2" />}</Label>
-            <Popover open={isTaskListPopoverOpen} onOpenChange={setIsTaskListPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  className="w-full justify-between"
-                  disabled={!formData.projectId || isLoadingTaskLists || isProcessing}
-                >
-                  {selectedTaskList ? (
-                    <span className="truncate">{selectedTaskList.name}</span>
-                  ) : (
-                    'Select a task list'
-                  )}
-                  <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                <Command>
-                  <CommandInput placeholder="Search task lists..." />
-                  <CommandEmpty>No task list found.</CommandEmpty>
-                  <CommandList>
-                    {taskLists.map(list => (
-                      <CommandItem
-                        key={list.id_string}
-                        value={list.name}
-                        onSelect={() => handleTaskListSelect(list.id_string)}
-                      >
-                        {list.name}
-                      </CommandItem>
-                    ))}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Default Custom Fields (Optional) {isLoadingCustomFields && <Loader2 className="h-4 w-4 animate-spin inline-block ml-2" />}</Label>
-          <div className="p-4 border rounded-md space-y-4 max-h-60 overflow-y-auto">
-            {customFields.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {isLoadingCustomFields ? 'Loading custom fields...' : 'No custom fields found for this project.'}
-              </p>
-            ) : (
-              customFields.map(field => (
-                <div key={field.id_string} className="space-y-2">
-                  <Label htmlFor={field.id_string} className="text-xs font-medium">
-                    {field.label_name}
-                  </Label>
-                  {field.column_name.startsWith('UDF_DATE') ? (
-                    <Input
-                      type="date"
-                      id={field.id_string}
-                      value={localCustomFields[field.id_string] || ''}
-                      onChange={e => handleCustomFieldChange(field.id_string, e.target.value)}
-                      disabled={isProcessing}
-                    />
-                  ) : (
-                    <Input
-                      type="text"
-                      id={field.id_string}
-                      placeholder={field.default_value || `Enter ${field.label_name}`}
-                      value={localCustomFields[field.id_string] || ''}
-                      onChange={e => handleCustomFieldChange(field.id_string, e.target.value)}
-                      disabled={isProcessing}
-                    />
-                  )}
-                </div>
-              ))
+          {/* --- THIS IS THE FIX: Added summary here --- */}
+          <JobSummary jobState={jobState} />
+          {/* --- END OF FIX --- */}
+          
+          <div className="mt-2 flex space-x-2">
+            {!isProcessing && (
+              <Button onClick={handleStart} className="w-full" disabled={!selectedProfileName || projects.length === 0 || taskNamesInput.trim().length === 0 || !autoTaskListId}>
+                <Play className="mr-2 h-4 w-4" /> Start Bulk Creation
+              </Button>
+            )}
+            
+            {isProcessing && !isPaused && (
+              <Button onClick={handlePause} className="w-1/2" variant="outline">
+                <Pause className="mr-2 h-4 w-4" /> Pause
+              </Button>
+            )}
+            
+            {isProcessing && isPaused && (
+              <Button onClick={handleResume} className="w-1/2">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resume
+              </Button>
+            )}
+            
+            {isProcessing && (
+              <Button onClick={handleEnd} className="w-1/2" variant="destructive">
+                <Square className="mr-2 h-4 w-4" /> End Job
+              </Button>
             )}
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="delay">Delay (in seconds)</Label>
-            <Input
-              id="delay"
-              type="number"
-              min="0.1"
-              step="0.1"
-              value={formData.delay}
-              onChange={e => onFormDataChange({ ...formData, delay: parseFloat(e.target.value) || 0.1 })}
-              disabled={isProcessing}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="emails">Assign Users (Emails, comma-separated)</Label>
-            <Input
-              id="emails"
-              type="text"
-              placeholder="user1@example.com, user2@example.com"
-              value={formData.emails || ''}
-              onChange={handleInputChange}
-              disabled={isProcessing}
-            />
-          </div>
-        </div>
       </CardContent>
-
-      <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="flex-1 flex gap-2">
-          {!isProcessing ? (
-            <Button
-              onClick={() => {
-                const allTaskNames = formData.taskNames.split('\n').map(name => name.trim()).filter(name => name !== '');
-                if (allTaskNames.length === 0) {
-                  toast({ title: 'No Tasks to Process', description: 'Please enter at least one task name.', variant: 'destructive' });
-                  return;
-                }
-                if (!formData.projectId || !formData.tasklistId) {
-                  toast({ title: 'Missing Information', description: 'Please select a project and a task list.', variant: 'destructive' });
-                  return;
-                }
-                
-                if (selectedProfileName) {
-                    setJobs(prev => ({
-                        ...prev,
-                        [selectedProfileName]: {
-                            ...jobState,
-                            results: [],
-                            isProcessing: true,
-                            isPaused: false,
-                            isComplete: false,
-                            processingStartTime: new Date(),
-                            totalToProcess: allTaskNames.length,
-                            currentDelay: formData.delay,
-                        }
-                    }));
-                }
-
-                socket?.emit('startBulkCreateTasks', {
-                  ...formData,
-                  taskNames: allTaskNames,
-                  selectedProfileName: selectedProfileName,
-                  activeProfile: activeProfile,
-                });
-                
-                toast({ title: `Processing Started`, description: `Creating ${allTaskNames.length} tasks...` });
-              }}
-              className="w-full sm:w-auto"
-              // --- THIS IS THE FIX ---
-              // Changed 'selectedProfile' to 'activeProfile'
-              disabled={!socket || !activeProfile}
-              // --- END OF FIX ---
-            >
-              <Play className="h-4 w-4 mr-2" />
-              Start Bulk Create
-            </Button>
-          ) : (
-            <>
-              <Button
-                onClick={() => {
-                    socket?.emit(isPaused ? 'resumeJob' : 'pauseJob', { profileName: selectedProfileName, jobType: 'projects' });
-                    if (selectedProfileName) {
-                      setJobs(prev => ({
-                        ...prev,
-                        [selectedProfileName]: {
-                          ...jobState,
-                          isPaused: !isPaused
-                        }
-                      }));
-                    }
-                }}
-                className="w-full sm:w-auto"
-                variant={isPaused ? 'default' : 'secondary'}
-              >
-                {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
-                {isPaused ? 'Resume' : 'Pause'}
-              </Button>
-              <Button
-                onClick={() => {
-                    socket?.emit('endJob', { profileName: selectedProfileName, jobType: 'projects' });
-                }}
-                className="w-full sm:w-auto"
-                variant="destructive"
-              >
-                <Square className="h-4 w-4 mr-2" />
-                End Job
-              </Button>
-            </>
-          )}
-        </div>
-      </CardFooter>
     </Card>
   );
 };

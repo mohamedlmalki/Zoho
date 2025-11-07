@@ -1,11 +1,9 @@
-// --- FILE: server/index.js (CORRECTED) ---
+// --- FILE: server/index.js (FINAL CODE WITH EXHAUSTIVE SCOPES) ---
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const cors = require('cors');
 const crypto = require('crypto');
-// --- MAKE SURE to require projects-handler.js ---
-// (Your file already does this, just confirming)
 const { readProfiles, writeProfiles, parseError, getValidAccessToken, makeApiCall, createJobId } = require('./utils');
 const deskHandler = require('./desk-handler');
 const inventoryHandler = require('./inventory-handler');
@@ -13,6 +11,7 @@ const catalystHandler = require('./catalyst-handler');
 const qntrlHandler = require('./qntrl-handler');
 const peopleHandler = require('./people-handler');
 const creatorHandler = require('./creator-handler');
+// --- ADDED PROJECTS HANDLER ---
 const projectsHandler = require('./projects-handler');
 require('dotenv').config();
 
@@ -31,6 +30,7 @@ catalystHandler.setActiveJobs(activeJobs);
 qntrlHandler.setActiveJobs(activeJobs);
 peopleHandler.setActiveJobs(activeJobs);
 creatorHandler.setActiveJobs(activeJobs);
+// --- ADDED PROJECTS HANDLER ---
 projectsHandler.setActiveJobs(activeJobs);
 
 
@@ -185,17 +185,9 @@ app.post('/api/catalyst/single', async (req, res) => {
 // --- NEW REST ENDPOINT FOR PROJECTS ---
 app.post('/api/projects/tasks/single', async (req, res) => {
     try {
-        // --- NOTE: You need to pass the *full activeProfile* object from the frontend ---
-        // --- or modify handleCreateSingleTask to fetch it based on profileName ---
-        const profiles = readProfiles();
-        const activeProfile = profiles.find(p => p.profileName === req.body.selectedProfileName);
-        if (!activeProfile) {
-             return res.status(404).json({ success: false, error: 'Profile not found.' });
-        }
-        const result = await projectsHandler.handleCreateSingleTask(req.body, activeProfile);
+        const result = await projectsHandler.handleCreateSingleTask(req.body);
         res.json(result);
     } catch (error) {
-        console.error("Error in single task creation endpoint:", error);
         res.status(500).json({ success: false, error: 'An unexpected server error occurred during single task creation.' });
     }
 });
@@ -360,12 +352,14 @@ io.on('connection', (socket) => {
                     throw new Error('Projects config (portalId) is missing.');
                 }
                 const { portalId } = activeProfile.projects;
+                // Use the portal ID to fetch portal details as a verification step
                 const portalResponse = await makeApiCall('get', `/portal/${portalId}`, null, activeProfile, 'projects');
                 
                 validationData = { 
+                    // --- FINAL FIX: Changed 'portal.name' to 'portal_details.name' ---
                     orgName: `Portal: ${portalResponse.data.portal_details.name}`,
                     agentInfo: { 
-                        firstName: `Portal Owner`, 
+                        firstName: `Portal Owner`, // Info is not readily available here, just confirming connection
                         lastName: '' 
                     },
                     portalData: portalResponse.data 
@@ -412,13 +406,7 @@ io.on('connection', (socket) => {
 
     // --- ADDED: Utility listener for Profile Modal ---
     socket.on('getProjectsPortals', (data) => {
-        // This check ensures the handler and its dependencies are loaded
-        if (projectsHandler && typeof projectsHandler.handleGetPortals === 'function') {
-            projectsHandler.handleGetPortals(socket, data);
-        } else {
-            console.error("[ERROR] projectsHandler.handleGetPortals is not available.");
-            socket.emit('apiError', { message: 'Server configuration error for Projects Portals.' });
-        }
+        projectsHandler.handleGetPortals(socket, data);
     });
 
     // --- Service-specific Listeners ---
@@ -437,13 +425,7 @@ io.on('connection', (socket) => {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                 if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
-                 } else {
-                    console.error(`[ERROR] Desk handler for '${event}' is not a function.`);
-                 }
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
         });
     }
 
@@ -460,13 +442,7 @@ io.on('connection', (socket) => {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                 if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
-                 } else {
-                     console.error(`[ERROR] Inventory handler for '${event}' is not a function.`);
-                 }
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
         });
     }
     
@@ -483,13 +459,7 @@ io.on('connection', (socket) => {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                 if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
-                 } else {
-                     console.error(`[ERROR] Catalyst handler for '${event}' is not a function.`);
-                 }
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
         });
     }
 	
@@ -505,13 +475,7 @@ io.on('connection', (socket) => {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                 if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
-                 } else {
-                     console.error(`[ERROR] Qntrl handler for '${event}' is not a function.`);
-                 }
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
         });
     }
 
@@ -528,12 +492,7 @@ io.on('connection', (socket) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
             if (activeProfile) {
-                if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
-                } else {
-                    console.error(`[ERROR] People handler for event '${event}' is not a function.`);
-                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
-                }
+                handler(socket, { ...data, activeProfile });
             } else {
                 socket.emit('bulkError', { message: 'Active profile not found.' });
             }
@@ -556,7 +515,7 @@ io.on('connection', (socket) => {
                 if (typeof handler === 'function') {
                     handler(socket, { ...data, activeProfile });
                 } else {
-                    console.error(`[ERROR] Creator handler for event '${event}' is not a function.`);
+                    console.error(`[ERROR] Handler for event '${event}' is not a function.`);
                     socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
                 }
             } else {
@@ -572,28 +531,21 @@ io.on('connection', (socket) => {
         'getProjectsTaskDetails': projectsHandler.handleGetTaskDetails,
         'getProjectsTasks': projectsHandler.handleGetTasks,
         'startBulkCreateTasks': projectsHandler.handleStartBulkCreateTasks,
-        'getProjectsCustomFields': projectsHandler.handleGetProjectsCustomFields,
-        
-        // --- THIS IS THE FIX ---
-        'getProjectsTaskLists': projectsHandler.handleGetTaskLists,
     };
 
     for (const [event, handler] of Object.entries(projectsListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
-            // --- FIX: Use 'activeProfile' from data if available, otherwise find by name ---
-            const activeProfile = data.activeProfile || (data.selectedProfileName ? profiles.find(p => p.profileName === data.selectedProfileName) : null);
-            
+            const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
             if (activeProfile) {
                 if (typeof handler === 'function') {
                     handler(socket, { ...data, activeProfile });
                 } else {
-                    console.error(`[ERROR] Projects handler for event '${event}' is not a function.`);
-                    socket.emit('bulkError', { profileName: activeProfile.profileName, jobType: 'projects', message: `Server error: Event ${event} is not configured.` });
+                    console.error(`[ERROR] Handler for event '${event}' is not a function.`);
+                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
                 }
             } else {
-                console.error(`[ERROR] Active profile not found for event '${event}'.`);
-                socket.emit('bulkError', { profileName: data.selectedProfileName, jobType: 'projects', message: 'Active profile not found.' });
+                socket.emit('bulkError', { message: 'Active profile not found.' });
             }
         });
     }

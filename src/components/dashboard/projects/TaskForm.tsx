@@ -1,177 +1,184 @@
-// --- FILE: src/components/dashboard/projects/TaskForm.tsx (FIXED) ---
-import React, { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Socket } from "socket.io-client";
-import { Button } from "@/components/ui/button";
+// --- FILE: src/components/dashboard/projects/TaskForm.tsx (FINAL CORRECTED) ---
+import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
+} from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ZohoProject } from './ProjectsDataTypes';
+import { Socket } from 'socket.io-client';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
-interface Project {
-  id_string: string;
-  name: string;
-}
-
-interface TaskList {
-  id_string: string;
-  name: string;
-}
-
-const formSchema = z.object({
-  projectId: z.string().min(1, "Project is required."),
-  tasklistId: z.string().min(1, "Task List is required."),
-  taskName: z.string().min(1, "Task Name is required."),
-  taskDescription: z.string().optional(),
-  custom_fields: z.record(z.string(), z.any()).optional(),
+const taskFormSchema = z.object({
+  projectId: z.string().min(1, 'Please select a project.'),
+  tasklistId: z.string().min(1, 'Task List ID is required.'),
+  name: z.string().min(1, 'Task name is required.'),
+  description: z.string().optional(),
 });
 
-type TaskFormValues = z.infer<typeof formSchema>;
+type TaskFormValues = z.infer<typeof taskFormSchema>;
 
 interface TaskFormProps {
+  selectedProfileName: string | null;
+  projects: ZohoProject[];
   socket: Socket | null;
-  selectedProfileName: string;
-  onSubmit: (data: any) => void;
-  isProcessing: boolean;
+  onCreateTask: () => void;
+  autoFilledTaskListId: string;
 }
 
+const SERVER_URL = 'http://localhost:3000';
+
 export const TaskForm: React.FC<TaskFormProps> = ({
-  socket,
   selectedProfileName,
-  onSubmit,
-  isProcessing,
+  projects,
+  socket,
+  onCreateTask,
+  autoFilledTaskListId,
 }) => {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [taskLists, setTaskLists] = useState<TaskList[]>([]);
-  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
-  const [isLoadingTaskLists, setIsLoadingTaskLists] = useState(false);
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const form = useForm<TaskFormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(taskFormSchema),
     defaultValues: {
-      projectId: "",
-      tasklistId: "",
-      taskName: "",
-      taskDescription: "",
-      custom_fields: {},
+      projectId: '',
+      tasklistId: '',
+      name: '',
+      description: '',
     },
   });
 
-  const selectedProjectId = form.watch("projectId");
+  const selectedProjectId = form.watch('projectId');
 
-  // --- FIX: EFFECT 1 - ATTACH ALL LISTENERS ---
   useEffect(() => {
-    if (!socket) return;
-
-    const handleProjectsList = (data: any) => {
-      if (data.success) {
-        setProjects(data.projects || []);
-      } else {
-        toast({ title: "Error", description: `Failed to get projects: ${data.message}`, variant: "destructive" });
-        setProjects([]);
-      }
-      setIsLoadingProjects(false);
-    };
-
-    const handleTasksList = (data: any) => {
-      if (data.success) {
-        setTaskLists(data.tasklist || []);
-      } else {
-        toast({ title: "Error", description: `Failed to get task lists: ${data.message}`, variant: "destructive" });
-        setTaskLists([]);
-      }
-      setIsLoadingTaskLists(false);
-    };
-
-    socket.on('projectsList', handleProjectsList);
-    socket.on('tasksList', handleTasksList);
-
-    return () => {
-      socket.off('projectsList', handleProjectsList);
-      socket.off('tasksList', handleTasksList);
-    };
-  }, [socket]); // Only re-run if the socket itself changes
-
-  // --- FIX: EFFECT 2 - FETCH PROJECTS ---
+    form.setValue('tasklistId', autoFilledTaskListId);
+  }, [autoFilledTaskListId, form.setValue]);
+  
   useEffect(() => {
-    if (socket && selectedProfileName) {
-      setIsLoadingProjects(true);
-      setProjects([]);
-      setTaskLists([]);
-      form.setValue("projectId", "");
-      form.setValue("tasklistId", "");
-      socket.emit('getProjectsProjects', { selectedProfileName });
+    // We only clear the tasklistId if the projectId changes
+    // But we don't want to clear it if autoFilledTaskListId is just about to be set
+    if (!autoFilledTaskListId) {
+       form.setValue('tasklistId', '');
     }
-  }, [selectedProfileName, socket, form]); // Run when profile changes
+  }, [selectedProjectId, autoFilledTaskListId, form.setValue]);
 
-  // --- FIX: EFFECT 3 - FETCH TASK LISTS ---
-  useEffect(() => {
-    if (socket && selectedProjectId) {
-      setIsLoadingTaskLists(true);
-      setTaskLists([]);
-      form.setValue("tasklistId", "");
-      socket.emit('getProjectsTasks', {
-        selectedProfileName: selectedProfileName,
-        projectId: selectedProjectId
+
+  async function onSubmit(data: TaskFormValues) {
+    if (!selectedProfileName) {
+      setApiError('No profile selected. Please select a profile from the dropdown.');
+      return;
+    }
+    setIsLoading(true);
+    setApiError(null);
+
+    const profile = (await (await fetch(`${SERVER_URL}/api/profiles`)).json()).find(
+      (p: any) => p.profileName === selectedProfileName
+    );
+    const portalId = profile?.projects?.portalId;
+
+    if (!portalId) {
+      setApiError('Portal ID is not configured for this profile.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${SERVER_URL}/api/projects/tasks/single`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedProfileName: selectedProfileName,
+          portalId: portalId,
+          projectId: data.projectId,
+          tasklistId: data.tasklistId,
+          taskName: data.name,
+          taskDescription: data.description,
+        }),
       });
-    } else {
-      setTaskLists([]);
-    }
-  }, [selectedProjectId, selectedProfileName, socket, form]); // Run when project selection changes
 
-  const onFormSubmit = (values: TaskFormValues) => {
-    onSubmit(values);
-  };
+      const result = await response.json();
+      setIsLoading(false);
+
+      if (result.success) {
+        toast({
+          title: 'Task Created Successfully!',
+          description: result.message,
+        });
+        form.reset({
+          projectId: data.projectId, // Keep project selected
+          tasklistId: data.tasklistId, // Keep tasklist ID
+          name: '', // Clear task name
+          description: '', // Clear description
+        });
+        onCreateTask(); // Refresh the task list in the "View Tasks" tab
+      } else {
+        setApiError(result.error || 'An unknown error occurred.');
+        toast({
+          title: 'Error Creating Task',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      setIsLoading(false);
+      const errorMessage = (error as Error).message;
+      setApiError(errorMessage);
+      toast({
+        title: 'Network Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+  }
 
   return (
+    // --- THIS IS THE FIX: Removed "max-w-2xl" from the className ---
     <Card>
       <CardHeader>
         <CardTitle>Create Single Task</CardTitle>
+        <CardDescription>
+          Fill in the details to create a new task in Zoho Projects.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onFormSubmit)} className="space-y-4">
-            
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="projectId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Project</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    disabled={isLoadingProjects || projects.length === 0}
-                  >
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={
-                          isLoadingProjects 
-                            ? "Loading projects..." 
-                            : (projects.length > 0 ? "Select a project" : "No projects found")
-                        } />
+                        <SelectValue placeholder="Select a project" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {projects.map((project) => (
-                        <SelectItem key={project.id_string} value={project.id_string}>
+                        <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
                       ))}
@@ -187,29 +194,18 @@ export const TaskForm: React.FC<TaskFormProps> = ({
               name="tasklistId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Task List</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    disabled={isLoadingTaskLists || taskLists.length === 0 || !selectedProjectId}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={
-                          isLoadingTaskLists
-                            ? "Loading task lists..."
-                            : (selectedProjectId ? (taskLists.length > 0 ? "Select a task list" : "No task lists found") : "Select a project first")
-                        } />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {taskLists.map((list) => (
-                        <SelectItem key={list.id_string} value={list.id_string}>
-                          {list.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Task List ID (Automatic)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={form.getValues('projectId') ? "Loading from 'View Tasks'..." : "Select a project first"}
+                      {...field}
+                      readOnly // Make it read-only
+                      className="text-muted-foreground"
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    This ID is filled automatically from the tasks in your 'View Tasks' tab.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -217,16 +213,12 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
             <FormField
               control={form.control}
-      name="taskName"
+              name="name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Task Name</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="My New Task"
-                      {...field}
-                      disabled={isProcessing}
-                    />
+                    <Input placeholder="e.g., Design homepage mockup" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -234,24 +226,31 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             />
             <FormField
               control={form.control}
-              name="taskDescription"
+              name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Task Description (Optional)</FormLabel>
+                  <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Optional description..."
+                      placeholder="Add more details about the task..."
+                      className="resize-none"
                       {...field}
-                      rows={3}
-                      disabled={isProcessing}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isProcessing}>
-              {isProcessing ? "Creating..." : "Create Task"}
+            
+            {apiError && (
+                <Alert variant="destructive">
+                    <AlertDescription>{apiError}</AlertDescription>
+                </Alert>
+            )}
+
+            <Button type="submit" disabled={isLoading || !form.getValues('tasklistId')}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading ? "Creating..." : "Create Task"}
             </Button>
           </form>
         </Form>
