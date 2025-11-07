@@ -1,388 +1,289 @@
-// --- FILE: server/projects-handler.js (MODIFIED) ---
+// --- FILE: server/projects-handler.js (CORRECTED) ---
 
-const { getValidAccessToken, makeApiCall, parseError, createJobId, readProfiles } = require('./utils');
-// --- NEW: Import URLSearchParams ---
-const { URLSearchParams } = require('url');
-
+const { makeApiCall, parseError, createJobId } = require('./utils');
 let activeJobs = {};
 
-const setActiveJobs = (jobs) => {
-    activeJobs = jobs;
-};
-
-// --- Utility function for job control ---
-const interruptibleSleep = (ms, jobId) => {
-    return new Promise(resolve => {
-        if (ms <= 0) return resolve();
-        const interval = 100;
-        let elapsed = 0;
-        const timerId = setInterval(() => {
-            if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') {
-                clearInterval(timerId);
-                return resolve();
-            }
-            elapsed += interval;
-            if (elapsed >= ms) {
-                clearInterval(timerId);
-                resolve();
-            }
-        }, interval);
-    });
-};
+// --- HELPER FUNCTION ---
+/**
+ * Awaits a specified number of seconds.
+ * @param {number} seconds - The number of seconds to wait.
+ */
+const wait = (seconds) => new Promise(resolve => setTimeout(resolve, seconds * 1000));
 
 /**
- * Fetches Zoho Projects portals using temporary credentials.
+ * Checks the status of a bulk job.
+ * @param {string} jobId - The unique identifier for the job.
+ * @returns {'running' | 'paused' | 'ended'} The current status of the job.
+ */
+const checkJobStatus = (jobId) => {
+    if (!activeJobs[jobId]) return 'ended';
+    return activeJobs[jobId].status;
+};
+
+// --- API HANDLERS ---
+
+/**
+ * Fetches all portals for the given profile.
  */
 const handleGetPortals = async (socket, data) => {
-    const { clientId, clientSecret, refreshToken } = data;
-
-    const tempProfile = {
-        profileName: 'temp_portal_fetch',
-        clientId,
-        clientSecret,
-        refreshToken,
-        projects: { portalId: '' }
-    };
-
+    const { activeProfile } = data;
     try {
-        await getValidAccessToken(tempProfile, 'projects');
-        const response = await makeApiCall('get', '/portals', null, tempProfile, 'projects');
-
-        if (Array.isArray(response.data) && response.data.length > 0) {
-            socket.emit('projectsPortalsResult', { portals: response.data });
-        } else {
-            socket.emit('projectsPortalsResult', { portals: [] });
-        }
+        const response = await makeApiCall('get', '/portals', null, activeProfile, 'projects');
+        socket.emit('projectsPortalsResult', { success: true, portals: response.data.portals });
     } catch (error) {
         const { message } = parseError(error);
-        socket.emit('projectsPortalsError', { message: message || 'Failed to fetch portals.' });
+        socket.emit('projectsPortalsResult', { success: false, error: message });
     }
 };
 
 /**
- * Retrieves projects for a given portal ID.
+ * Fetches all projects for the given portal.
  */
 const handleGetProjects = async (socket, data) => {
     const { activeProfile } = data;
-    const portalId = activeProfile.projects?.portalId;
-    
-    if (!portalId) {
-        return socket.emit('projectsProjectsResult', { success: false, error: 'Portal ID is missing from profile.', data: [] });
+    if (!activeProfile.projects || !activeProfile.projects.portalId) {
+        return socket.emit('projectsProjectsResult', { success: false, error: 'Portal ID not configured for this profile.' });
     }
-
+    const { portalId } = activeProfile.projects;
+    
     try {
-        const path = `/portal/${portalId}/projects`;
-        const response = await makeApiCall('get', path, null, activeProfile, 'projects');
-
-        const projects = Array.isArray(response.data) ? response.data : (response.data.projects || []); 
-
-        socket.emit('projectsProjectsResult', { 
-            success: true, 
-            data: projects,
-        });
-
+        const response = await makeApiCall('get', `/portal/${portalId}/projects`, null, activeProfile, 'projects');
+        
+        // --- LOGGING AS REQUESTED ---
+        console.log('--- ZOHO API RESPONSE: PROJECTS ---');
+        console.log(JSON.stringify(response.data, null, 2));
+        console.log('-----------------------------------');
+        
+        socket.emit('projectsProjectsResult', { success: true, data: response.data.projects });
     } catch (error) {
-        const { message, fullResponse } = parseError(error);
-        socket.emit('projectsProjectsResult', { 
-            success: false, 
-            error: message,
-            fullResponse: fullResponse,
-            data: []
-        });
+        const { message } = parseError(error);
+        socket.emit('projectsProjectsResult', { success: false, error: message });
     }
 };
 
 /**
- * Retrieves task lists for a given project.
+ * Fetches all task lists for a specific project.
  */
 const handleGetTaskLists = async (socket, data) => {
     const { activeProfile, projectId } = data;
-    const portalId = activeProfile.projects?.portalId;
-    
-    if (!portalId) {
-        return socket.emit('projectsTaskListsResult', { success: false, error: 'Portal ID is missing.', data: [] });
-    }
-
-    try {
-        const path = `/portal/${portalId}/all-tasklists`;
-        const queryParams = projectId ? { project_id: projectId } : {};
-        const response = await makeApiCall('get', path, null, activeProfile, 'projects', queryParams);
-
-        const taskLists = response.data.tasklists || [];
-        const taskListsArray = Array.isArray(taskLists) ? taskLists : [];
-
-        socket.emit('projectsTaskListsResult', { 
-            success: true, 
-            data: taskListsArray,
-        });
-
-    } catch (error) {
-        const { message, fullResponse } = parseError(error);
-        socket.emit('projectsTaskListsResult', { 
-            success: false, 
-            error: message,
-            fullResponse: fullResponse,
-            data: []
-        });
-    }
-};
-
-
-/**
- * Retrieves tasks for a given portal.
- */
-const handleGetTasks = async (socket, data) => {
-    const { activeProfile, queryParams = {} } = data;
-    const portalId = activeProfile.projects?.portalId;
-    
-    if (!portalId) {
-        return socket.emit('projectsTasksResult', { 
-            success: false, 
-            error: 'Portal ID is not configured for this profile.', 
-            data: []
-        });
-    }
-
-    try {
-        const path = `/portal/${portalId}/tasks`;
-        
-        const response = await makeApiCall('get', path, null, activeProfile, 'projects', queryParams);
-
-        const tasks = response.data.tasks || [];
-        const pageInfo = response.data.page_info || {};
-
-        socket.emit('projectsTasksResult', { 
-            success: true, 
-            data: tasks,
-            pageInfo: pageInfo
-        });
-
-    } catch (error) {
-        const { message, fullResponse } = parseError(error);
-        socket.emit('projectsTasksResult', { 
-            success: false, 
-            error: message,
-            fullResponse: fullResponse,
-            data: []
-        });
-    }
-};
-
-// --- NEW FUNCTION TO GET CUSTOM FIELDS ---
-const handleGetProjectsCustomFields = async (socket, data) => {
-    const { activeProfile, projectId } = data;
-    const portalId = activeProfile.projects?.portalId;
-    
-    if (!portalId) {
-        return socket.emit('projectsCustomFieldsResult', { success: false, error: 'Portal ID is missing from profile.', fields: [] });
+    if (!activeProfile.projects || !activeProfile.projects.portalId) {
+        return socket.emit('projectsTaskListsResult', { success: false, error: 'Portal ID not configured for this profile.' });
     }
     if (!projectId) {
-        return socket.emit('projectsCustomFieldsResult', { success: false, error: 'Project ID is required.', fields: [] });
+         return socket.emit('projectsTaskListsResult', { success: false, error: 'Project ID is required to fetch task lists.' });
     }
-
+    
+    const { portalId } = activeProfile.projects;
+    const url = `/portal/${portalId}/projects/${projectId}/tasklists/`;
+    
     try {
-        const path = `/portal/${portalId}/projects/${projectId}/customfields/`;
-        const response = await makeApiCall('get', path, null, activeProfile, 'projects');
+        const response = await makeApiCall('get', url, null, activeProfile, 'projects');
+        
+        console.log('--- ZOHO API RESPONSE: TASK LISTS ---');
+        console.log(JSON.stringify(response.data, null, 2));
+        console.log('-------------------------------------');
 
-        // Flatten the complex layout structure from the API response
-        const customFields = response.data.customfield_layout
-                                .map(layout => layout.sections.map(sec => sec.fields))
-                                .flat(2); // Flattens the array of arrays of arrays
-
-        socket.emit('projectsCustomFieldsResult', { 
-            success: true, 
-            fields: customFields,
-        });
-
+        socket.emit('projectsTaskListsResult', { success: true, data: response.data.tasklists });
     } catch (error) {
-        const { message, fullResponse } = parseError(error);
-        socket.emit('projectsCustomFieldsResult', { 
-            success: false, 
-            error: message,
-            fullResponse: fullResponse,
-            fields: []
-        });
+        const { message } = parseError(error);
+        socket.emit('projectsTaskListsResult', { success: false, error: message });
     }
 };
-// --- END NEW FUNCTION ---
 
 /**
- * Creates a single task. (Used by REST endpoint and internally by bulk handler)
+ * Fetches tasks, optionally filtered by project_id.
  */
-// --- MODIFIED TO HANDLE CUSTOM FIELDS ---
-const handleCreateSingleTask = async (data) => {
-    // Add custom_fields to destructuring
-    const { portalId, projectId, taskName, taskDescription, tasklistId, selectedProfileName, custom_fields } = data; 
-    
-    const profiles = readProfiles();
-    const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
-
-    if (!activeProfile || !portalId || !projectId || !tasklistId) {
-         return { success: false, error: 'Missing profile, portal ID, project ID, or Task List ID.' };
+const handleGetTasks = async (socket, data) => {
+    const { activeProfile, queryParams } = data; // queryParams might contain project_id
+    if (!activeProfile.projects || !activeProfile.projects.portalId) {
+        return socket.emit('projectsTasksResult', { success: false, error: 'Portal ID not configured for this profile.' });
     }
-
+    const { portalId } = activeProfile.projects;
+    const url = `/portal/${portalId}/tasks/`;
+    
     try {
-        const path = `/portal/${portalId}/projects/${projectId}/tasks`;
-        
-        // --- FIX: Use URLSearchParams to send form-urlencoded data ---
-        // This is more reliable for custom fields.
-        const taskData = new URLSearchParams();
-        taskData.append('name', taskName);
-        if (taskDescription) {
-            taskData.append('description', taskDescription);
-        }
-        
-        // --- FIX: Use tasklist_id param instead of nested object ---
-        taskData.append('tasklist_id', tasklistId); 
-        // --- END FIX ---
-        
-        // --- NEW: Add custom fields to the request ---
-        if (custom_fields) {
-            for (const [key, value] of Object.entries(custom_fields)) {
-                // Only append if a value was provided and is not null/undefined
-                if (value !== null && value !== undefined && value !== '') { 
-                    taskData.append(key, value);
-                }
-            }
-        }
-        // --- END NEW ---
+        const response = await makeApiCall('get', url, null, activeProfile, 'projects', queryParams);
+        socket.emit('projectsTasksResult', { success: true, data: response.data.tasks });
+    } catch (error) {
+        const { message } = parseError(error);
+        socket.emit('projectsTasksResult', { success: false, error: message });
+    }
+};
 
-        const response = await makeApiCall('post', path, taskData, activeProfile, 'projects');
+/**
+ * Fetches details for a single task.
+ */
+const handleGetTaskDetails = async (socket, data) => {
+    const { activeProfile, taskId } = data;
+    if (!activeProfile.projects || !activeProfile.projects.portalId) {
+        return socket.emit('projectsTaskDetailsResult', { success: false, error: 'Portal ID not configured for this profile.' });
+    }
+    if (!taskId) {
+        return socket.emit('projectsTaskDetailsResult', { success: false, error: 'Task ID is required.' });
+    }
+    const { portalId } = activeProfile.projects;
+    const url = `/portal/${portalId}/tasks/${taskId}/`;
+    
+    try {
+        const response = await makeApiCall('get', url, null, activeProfile, 'projects');
+        socket.emit('projectsTaskDetailsResult', { success: true, data: response.data.tasks[0] });
+    } catch (error) {
+        const { message } = parseError(error);
+        socket.emit('projectsTaskDetailsResult', { success: false, error: message });
+    }
+};
+
+/**
+ * Fetches custom fields for a specific project.
+ */
+const handleGetProjectsCustomFields = async (socket, data) => {
+    const { activeProfile, projectId } = data;
+    if (!activeProfile.projects || !activeProfile.projects.portalId) {
+        return socket.emit('projectsCustomFieldsResult', { success: false, error: 'Portal ID not configured for this profile.' });
+    }
+    if (!projectId) {
+         return socket.emit('projectsCustomFieldsResult', { success: false, error: 'Project ID is required to fetch custom fields.' });
+    }
+    
+    const { portalId } = activeProfile.projects;
+    const url = `/portal/${portalId}/projects/${projectId}/customfields/`;
+    
+    try {
+        const response = await makeApiCall('get', url, null, activeProfile, 'projects');
         
-        // --- FIX #2: Check for the direct task object in the response (from your file) ---
-        let newTask;
-        if (response.data && response.data.id && response.data.name) {
-            newTask = response.data;
-        } else if (response.data.tasks && Array.isArray(response.data.tasks)) {
-            newTask = response.data.tasks[0];
-        }
-        // --- END FIX #2 ---
+        console.log('--- ZOHO API RESPONSE: CUSTOM FIELDS ---');
+        console.log(JSON.stringify(response.data, null, 2));
+        console.log('----------------------------------------');
 
-        if (newTask) { // This will now be true
-            return { 
-                success: true, 
-                fullResponse: newTask, // This will now send the correct task object
-                message: `Task "${newTask.name}" created successfully.`,
-                taskId: newTask.id,
-                taskPrefix: newTask.prefix,
-            };
-        } else {
-             return { 
-                success: false, 
-                error: 'Task creation failed, API response was not in the expected format.', // Updated error
-                fullResponse: response.data,
-            };
-        }
+        socket.emit('projectsCustomFieldsResult', { success: true, fields: response.data.custom_fields });
+    } catch (error) {
+        const { message } = parseError(error);
+        socket.emit('projectsCustomFieldsResult', { success: false, error: message });
+    }
+};
 
+/**
+ * Creates a single task. Used by REST API.
+ */
+const handleCreateSingleTask = async (body, activeProfile) => {
+    const { projectId, tasklistId, taskName, taskDescription, custom_fields, emails } = body;
+    
+    if (!activeProfile || !activeProfile.projects || !activeProfile.projects.portalId) {
+        return { success: false, error: 'Portal ID not configured for this profile.' };
+    }
+    if (!projectId || !tasklistId || !taskName) {
+        return { success: false, error: 'Project ID, Task List ID, and Task Name are required.' };
+    }
+    
+    const { portalId } = activeProfile.projects;
+    const url = `/portal/${portalId}/projects/${projectId}/tasks/`;
+    
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('name', taskName);
+    form.append('tasklist_id', tasklistId);
+    if (taskDescription) form.append('description', taskDescription);
+    if (emails) form.append('person_responsible', emails);
+    if (custom_fields) {
+        form.append('custom_fields', JSON.stringify(custom_fields));
+    }
+    
+    try {
+        const response = await makeApiCall('post', url, form, activeProfile, 'projects');
+        return { success: true, data: response.data.tasks[0] };
     } catch (error) {
         const { message, fullResponse } = parseError(error);
         return { success: false, error: message, fullResponse };
     }
 };
-// --- END MODIFICATION ---
 
 /**
- * Handles bulk creation of tasks from a list of names.
+ * Starts a bulk creation job for tasks.
  */
-// --- MODIFIED TO HANDLE CUSTOM FIELDS ---
 const handleStartBulkCreateTasks = async (socket, data) => {
-    // Add custom_fields to destructuring
-    const { taskNames, projectId, taskDescription, tasklistId, delay, selectedProfileName, activeProfile, custom_fields } = data;
+    const {
+        activeProfile,
+        taskNames,
+        taskDescription,
+        projectId,
+        tasklistId,
+        delay,
+        emails,
+        custom_fields,
+    } = data;
     
-    console.log(`[PROJECTS JOB START] Profile: ${selectedProfileName}. Project ID: ${projectId}. TaskList ID: ${tasklistId}. Tasks Queued: ${taskNames.length}`);
-
-    const jobId = createJobId(socket.id, selectedProfileName, 'projects');
-    activeJobs[jobId] = { status: 'running' };
-    const tasksToProcess = taskNames.map(name => name.trim()).filter(t => t.length > 0);
-
-    if (tasksToProcess.length === 0) {
-        console.error('[PROJECTS JOB ERROR] No valid task names provided after filtering.');
-        return socket.emit('bulkError', { message: 'No valid task names provided.', profileName: selectedProfileName, jobType: 'projects' });
-    }
+    const jobId = createJobId(socket.id, activeProfile.profileName, 'projects');
+    activeJobs[jobId] = { status: 'running', processed: 0, total: taskNames.length };
     
-    const jobState = activeJobs[jobId] || {};
-    jobState.totalToProcess = tasksToProcess.length;
+    console.log(`[JOB START] ${jobId} - Creating ${taskNames.length} tasks in Project ${projectId}`);
 
-
-    try {
-        if (!activeProfile || !activeProfile.projects?.portalId || !tasklistId) {
-            throw new Error('Profile, Portal ID, or Task List ID is missing.');
-        }
-        
-        const portalId = activeProfile.projects.portalId;
-
-        for (let i = 0; i < tasksToProcess.length; i++) {
-            if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
-            while (activeJobs[jobId]?.status === 'paused') {
-                await new Promise(resolve => setTimeout(resolve, 500));
+    const { portalId } = activeProfile.projects;
+    const url = `/portal/${portalId}/projects/${projectId}/tasks/`;
+    
+    for (let i = 0; i < taskNames.length; i++) {
+        const taskName = taskNames[i];
+        try {
+            let jobStatus = checkJobStatus(jobId);
+            while (jobStatus === 'paused') {
+                await wait(2);
+                jobStatus = checkJobStatus(jobId);
             }
-            if (i > 0 && delay > 0) await interruptibleSleep(delay * 1000, jobId);
-            if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+            if (jobStatus === 'ended') {
+                console.log(`[JOB END] ${jobId} - Job ended prematurely by user.`);
+                socket.emit('bulkEnded', { profileName: activeProfile.profileName, jobType: 'projects' });
+                delete activeJobs[jobId];
+                return;
+            }
 
-            const taskName = tasksToProcess[i];
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('name', taskName);
+            form.append('tasklist_id', tasklistId);
+            if (taskDescription) form.append('description', taskDescription);
+            if (emails) form.append('person_responsible', emails);
+            if (custom_fields && Object.keys(custom_fields).length > 0) {
+                form.append('custom_fields', JSON.stringify(custom_fields));
+            }
+
+            const response = await makeApiCall('post', url, form, activeProfile, 'projects');
+            const createdTask = response.data.tasks[0];
             
-            console.log(`[PROJECTS JOB] Processing Task ${i + 1}/${tasksToProcess.length}: ${taskName}`);
-            
-            // --- MODIFIED: Pass custom_fields to the single task handler ---
-            const result = await handleCreateSingleTask({
-                portalId,
-                projectId,
-                taskName,
-                taskDescription,
-                tasklistId,
-                selectedProfileName,
-                custom_fields, // Pass the custom fields object
+            socket.emit('projectsResult', {
+                profileName: activeProfile.profileName,
+                success: true,
+                projectName: taskName, 
+                details: `Task created with ID: ${createdTask.id_string}`,
+                fullResponse: createdTask
             });
-            // --- END MODIFICATION ---
+            
+            await wait(delay);
 
-            if (result.success) {
-                console.log(`[PROJECTS JOB SUCCESS] Emitting result for: ${taskName}. Task Prefix: ${result.taskPrefix}`);
-                socket.emit('projectsResult', { 
-                    projectName: taskName, // Using name as the key
-                    success: true,
-                    details: result.message,
-                    fullResponse: result.fullResponse,
-                    profileName: selectedProfileName
-                });
-            } else {
-                console.error(`[PROJECTS JOB ERROR] Emitting error for: ${taskName}. Reason: ${result.error}`);
-                socket.emit('projectsResult', { 
-                    projectName: taskName, 
-                    success: false, 
-                    error: result.error, 
-                    fullResponse: result.fullResponse, 
-                    profileName: selectedProfileName 
-                });
-            }
-        }
-
-    } catch (error) {
-        console.error('[PROJECTS JOB CRITICAL ERROR]', error.message);
-        socket.emit('bulkError', { message: error.message || 'A critical server error occurred.', profileName: selectedProfileName, jobType: 'projects' });
-    } finally {
-        if (activeJobs[jobId]) {
-            const finalStatus = activeJobs[jobId].status;
-            if (finalStatus === 'ended') {
-                console.log('[PROJECTS JOB] Job manually ended.');
-                socket.emit('bulkEnded', { profileName: selectedProfileName, jobType: 'projects' });
-            } else {
-                console.log('[PROJECTS JOB] Job successfully completed all tasks.');
-                socket.emit('bulkComplete', { profileName: selectedProfileName, jobType: 'projects' });
-            }
-            delete activeJobs[jobId];
+        } catch (error) {
+            const { message, fullResponse } = parseError(error);
+            socket.emit('projectsResult', {
+                profileName: activeProfile.profileName,
+                success: false,
+                projectName: taskName,
+                error: message,
+                fullResponse: fullResponse
+            });
         }
     }
+    
+    console.log(`[JOB COMPLETE] ${jobId} - Finished processing tasks.`);
+    socket.emit('bulkComplete', { profileName: activeProfile.profileName, jobType: 'projects' });
+    delete activeJobs[jobId];
 };
-// --- END MODIFICATION ---
 
 
 module.exports = {
-    setActiveJobs,
+    setActiveJobs: (jobs) => { activeJobs = jobs; },
     handleGetPortals,
     handleGetProjects,
-    handleGetTaskLists,
+    handleGetTaskLists, 
     handleGetTasks,
+    handleGetTaskDetails,
+    handleGetProjectsCustomFields,
     handleCreateSingleTask,
     handleStartBulkCreateTasks,
-    handleGetProjectsCustomFields, // --- NEW EXPORT ---
 };

@@ -727,7 +727,6 @@ const MainApp = () => {
     }
   };
 
-  // --- THIS IS THE RETURN STATEMENT ---
   return (
     <>
       <BrowserRouter>
@@ -916,7 +915,7 @@ const App = () => (
       <Sonner />
       <MainApp />
     </TooltipProvider>
-  </QueryClienTProvider>
+  </QueryClientProvider>
 );
 
 export default App;

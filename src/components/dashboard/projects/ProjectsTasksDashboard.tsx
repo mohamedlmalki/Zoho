@@ -1,13 +1,11 @@
-// --- FILE: src/components/dashboard/projects/ProjectsTasksDashboard.tsx (MODIFIED) ---
+// --- FILE: src/components/dashboard/projects/ProjectsTasksDashboard.tsx (CORRECTED) ---
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Socket } from 'socket.io-client';
 import { DashboardLayout } from '../DashboardLayout';
 import { useToast } from '@/hooks/use-toast';
 import { Profile } from '@/App';
-// --- MODIFIED: Import new types ---
 import { ProjectsJobs, ProjectsJobState, ZohoProject, ZohoTask, ZohoTaskList, ProjectCustomField } from './ProjectsDataTypes';
-// --- END MODIFICATION ---
 import { TaskForm } from './TaskForm';
 import { TaskBulkForm } from './TaskBulkForm'; 
 import { TaskResultsDisplay } from './TaskResultsDisplay';
@@ -61,17 +59,11 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
   const [tasks, setTasks] = useState<ZohoTask[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(false);
   
-  // --- RESTORED: Your original autoTaskListId state ---
   const [autoTaskListId, setAutoTaskListId] = useState<string | null>(null);
-
-  // --- NEW: State for Task Lists (for Single Create form) ---
   const [taskLists, setTaskLists] = useState<ZohoTaskList[]>([]);
   const [isLoadingTaskLists, setIsLoadingTaskLists] = useState(false);
-
-  // --- NEW: State for Custom Fields ---
   const [customFields, setCustomFields] = useState<ProjectCustomField[]>([]);
   const [isLoadingCustomFields, setIsLoadingCustomFields] = useState(false);
-  // --- END NEW ---
 
   const { data: profiles = [] } = useQuery<Profile[]>({
     queryKey: ['profiles'],
@@ -93,7 +85,10 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
   }, [projectsProfiles, activeProfileName]);
   
   const selectedProfile = projectsProfiles.find(p => p.profileName === activeProfileName) || null;
-  const jobState = jobs[activeProfileName || ''] || createInitialJobState();
+  
+  const jobState: ProjectsJobState = (activeProfileName && jobs[activeProfileName])
+    ? jobs[activeProfileName]
+    : createInitialJobState();
 
   useEffect(() => {
     if (socket && activeProfileName && selectedProfile) {
@@ -113,13 +108,12 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
         });
     };
     
-    const handleProjectsResult = (result: { success: boolean, data: ZohoProject[], error?: string }) => {
+    const handleProjectsResult = (result: { success: boolean, data?: ZohoProject[], error?: string }) => {
         setIsDataLoading(false);
-        if (result.success) {
+        if (result.success && result.data) {
             setProjects(result.data);
             if (result.data.length > 0) {
                 if (!selectedProjectId) {
-                   // --- MODIFIED: Use id_string ---
                    setSelectedProjectId(result.data[0].id_string);
                 }
             } else {
@@ -129,18 +123,16 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
         } else {
             setProjects([]);
             setSelectedProjectId(null);
-            toast({ title: "Error Fetching Projects", description: result.error, variant: 'destructive' });
+            toast({ title: "Error Fetching Projects", description: result.error || "Received invalid project data.", variant: 'destructive' });
         }
     };
     
-    // --- RESTORED: Your original logic ---
-    const handleTasksResult = (result: { success: boolean, data: ZohoTask[], error?: string }) => {
+    const handleTasksResult = (result: { success: boolean, data?: ZohoTask[], error?: string }) => {
         setIsDataLoading(false);
-        if (result.success) {
+        if (result.success && result.data) {
             setTasks(result.data);
             toast({ title: "Tasks Loaded", description: `${result.data.length} tasks found for the selected project.` });
             
-            // This is your original logic to get the ID
             if (result.data.length > 0) {
                 const firstTask = result.data[0];
                 if (firstTask.tasklist && firstTask.tasklist.id) {
@@ -149,78 +141,68 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
             } else {
                 setAutoTaskListId(null); 
             }
-
         } else {
             setTasks([]);
             setAutoTaskListId(null);
-            toast({ title: "Error Fetching Tasks", description: result.error, variant: 'destructive' });
+            toast({ title: "Error Fetching Tasks", description: result.error || "Received invalid task data.", variant: 'destructive' });
         }
     };
-    // --- END RESTORED ---
 
-    // --- NEW: Listener for Task Lists (for Single Create) ---
-    const handleTaskListsResult = (result: { success: boolean, data: ZohoTaskList[], error?: string }) => {
+    const handleTaskListsResult = (result: { success: boolean, data?: ZohoTaskList[], error?: string }) => {
         setIsLoadingTaskLists(false);
-        if (result.success) {
+        if (result.success && result.data) {
             setTaskLists(result.data);
         } else {
             setTaskLists([]);
-            toast({ title: "Error Fetching Task Lists", description: result.error, variant: "destructive"});
+            toast({ title: "Error Fetching Task Lists", description: result.error || "Received invalid task list data.", variant: "destructive"});
         }
     };
-    // --- END NEW ---
 
-    // --- NEW: Listener for Custom Fields ---
-    const handleCustomFieldsResult = (result: { success: boolean, fields: ProjectCustomField[], error?: string }) => {
+    const handleCustomFieldsResult = (result: { success: boolean, fields?: ProjectCustomField[], error?: string }) => {
         setIsLoadingCustomFields(false);
-        if (result.success) {
+        if (result.success && result.fields) {
             setCustomFields(result.fields);
             toast({ title: "Custom Fields Loaded", description: `Found ${result.fields.length} custom fields.` });
         } else {
             setCustomFields([]);
-            toast({ title: "Error Fetching Custom Fields", description: result.error, variant: 'destructive' });
+            toast({ title: "Error Fetching Custom Fields", description: result.error || "Received invalid custom fields data.", variant: 'destructive' });
         }
     };
-    // --- END NEW ---
 
     socket.on('apiStatusResult', handleApiStatus);
     socket.on('projectsProjectsResult', handleProjectsResult); 
     socket.on('projectsTasksResult', handleTasksResult);       
-    socket.on('projectsTaskListsResult', handleTaskListsResult); // --- NEW ---
-    socket.on('projectsCustomFieldsResult', handleCustomFieldsResult); // --- NEW ---
+    socket.on('projectsTaskListsResult', handleTaskListsResult); 
+    socket.on('projectsCustomFieldsResult', handleCustomFieldsResult); 
 
     return () => {
       socket.off('apiStatusResult', handleApiStatus);
       socket.off('projectsProjectsResult', handleProjectsResult);
       socket.off('projectsTasksResult', handleTasksResult);
-      socket.off('projectsTaskListsResult', handleTaskListsResult); // --- NEW ---
-      socket.off('projectsCustomFieldsResult', handleCustomFieldsResult); // --- NEW ---
+      socket.off('projectsTaskListsResult', handleTaskListsResult); 
+      socket.off('projectsCustomFieldsResult', handleCustomFieldsResult); 
     };
   }, [socket, toast, selectedProjectId]); 
 
-  // --- MODIFIED: This now fetches Tasks, Task Lists, and Custom Fields ---
   const fetchTasks = useCallback(() => {
       if (socket && activeProfileName && selectedProjectId && selectedProfile) {
         setIsDataLoading(true);
-        setIsLoadingTaskLists(true); // --- NEW ---
-        setIsLoadingCustomFields(true); // --- NEW ---
-        setCustomFields([]); // Clear old fields
+        setIsLoadingTaskLists(true); 
+        setIsLoadingCustomFields(true); 
+        setCustomFields([]); 
 
-        // 1. Fetch Tasks (for "View" tab and "autoTaskLiskId")
         const queryParams = { 
             project_id: selectedProjectId, 
             per_page: '100', 
         }; 
         socket.emit('getProjectsTasks', { selectedProfileName: activeProfileName, activeProfile: selectedProfile, queryParams });
         
-        // 2. Fetch Task Lists (for "Single Create" tab dropdown)
         socket.emit('getProjectsTaskLists', { 
             selectedProfileName: activeProfileName, 
             activeProfile: selectedProfile, 
             projectId: selectedProjectId 
         });
 
-        // 3. Fetch Custom Fields (for both create tabs)
         socket.emit('getProjectsCustomFields', {
             selectedProfileName: activeProfileName,
             activeProfile: selectedProfile,
@@ -229,14 +211,13 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
 
       } else {
           setTasks([]);
-          setTaskLists([]); // --- NEW ---
-          setCustomFields([]); // --- NEW ---
+          setTaskLists([]); 
+          setCustomFields([]); 
           setIsDataLoading(false);
-          setIsLoadingTaskLists(false); // --- NEW ---
-          setIsLoadingCustomFields(false); // --- NEW ---
+          setIsLoadingTaskLists(false); 
+          setIsLoadingCustomFields(false); 
       }
   }, [socket, activeProfileName, selectedProjectId, selectedProfile]);
-  // --- END MODIFICATION ---
 
   useEffect(() => {
       fetchTasks();
@@ -258,8 +239,8 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
       setProjects([]);
       setTasks([]);
       setAutoTaskListId(null);
-      setTaskLists([]); // --- NEW ---
-      setCustomFields([]); // --- NEW ---
+      setTaskLists([]); 
+      setCustomFields([]); 
       toast({ title: "Profile Changed", description: `Switched to ${profileName}` });
     }
   };
@@ -347,12 +328,12 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
             <p className="text-muted-foreground">{description}</p>
             
             {selectedProfile && (
-                // --- FIX #2: Set default tab to "bulk-create" ---
                 <Tabs defaultValue="bulk-create">
-                    {/* --- FIX #1: Added classes to make tabs wide --- */}
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="create">Create Single Task</TabsTrigger>
+                        {/* --- THIS IS THE FIX --- */}
                         <TabsTrigger value="bulk-create">Bulk Create Tasks</TabsTrigger>
+                        {/* --- END OF FIX --- */}
                         <TabsTrigger value="view">View Tasks</TabsTrigger>
                     </TabsList>
                     
@@ -363,7 +344,6 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
                             projects={projects}
                             socket={socket}
                             onCreateTask={fetchTasks}
-                            // --- PASSING NEW PROPS ---
                             taskLists={taskLists}
                             isLoadingTaskLists={isLoadingTaskLists}
                             customFields={customFields}
@@ -382,8 +362,7 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
                                     socket={socket}
                                     jobState={jobState}
                                     setJobs={setJobs}
-                                    autoTaskListId={autoTaskListId} // <-- Your original prop
-                                    // --- NEW PROPS ---
+                                    autoTaskListId={autoTaskListId}
                                     customFields={customFields}
                                     isLoadingCustomFields={isLoadingCustomFields}
                                 />
@@ -416,7 +395,7 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
             {!selectedProfile && (
                 <div className="text-center p-10 border rounded-lg">
                     <p className="font-semibold">No Zoho Projects Profile Selected</p>
-                    <p className="text-sm text-muted-foreground">Please select a profile or add a new one with Projects configuration.</p>
+                    <p className="text-muted-foreground">Please select a profile or add a new one with Projects configuration.</p>
                 </div>
             )}
         </div>

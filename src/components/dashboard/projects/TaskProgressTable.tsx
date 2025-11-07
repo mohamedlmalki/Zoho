@@ -1,4 +1,4 @@
-// --- FILE: src/components/dashboard/projects/TaskProgressTable.tsx (FIXED) ---
+// --- FILE: src/components/dashboard/projects/TaskProgressTable.tsx (CORRECTED) ---
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
@@ -16,19 +16,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress'; // <-- ADDED PROGRESS BAR IMPORT
+import { Progress } from '@/components/ui/progress';
 
 interface TaskProgressTableProps {
-  jobState: TaskProgressState;
+  jobState?: TaskProgressState; // Make jobState optional
   onClear: () => void;
   onPause: () => void;
   onResume: () => void;
   onEnd: () => void;
 }
 
-// --- REMOVED JobSummary component from here ---
-
-// JobControls component (this is correct)
 const JobControls: React.FC<{
   isProcessing: boolean; isPaused: boolean; isComplete: boolean;
   onPause: () => void; onResume: () => void; onEnd: () => void; onClear: () => void;
@@ -71,7 +68,27 @@ const JobControls: React.FC<{
 
 
 export const TaskProgressTable: React.FC<TaskProgressTableProps> = ({ 
-  jobState, 
+  // --- THIS IS THE FIX: Provide a default value for jobState ---
+  jobState = {
+    results: [],
+    isProcessing: false,
+    isPaused: false,
+    isComplete: false,
+    processingTime: 0,
+    totalToProcess: 0,
+    countdown: 0,
+    filterText: '',
+    formData: {
+      taskNames: '',
+      taskDescription: '',
+      projectId: '',
+      tasklistId: '',
+      delay: 1,
+      emails: '',
+      custom_fields: {},
+    }
+  },
+  // --- END OF FIX ---
   onClear,
   onPause,
   onResume,
@@ -79,11 +96,13 @@ export const TaskProgressTable: React.FC<TaskProgressTableProps> = ({
 }) => {
   const [modalData, setModalData] = useState<any | null>(null);
 
+  // These are now safe because jobState has a default
   const isProcessing = jobState.isProcessing || jobState.isPaused;
   const isComplete = jobState.isComplete;
 
   const currentStatus: TaskLogResult[] = useMemo(() => {
-    const results = [...jobState.results];
+    // This line is now safe
+    const results = [...(jobState.results || [])]; 
     if (isProcessing && results.length < jobState.totalToProcess) {
       const remainingCount = jobState.totalToProcess - results.length;
       results.push({
@@ -169,10 +188,8 @@ export const TaskProgressTable: React.FC<TaskProgressTableProps> = ({
     }
   ], []);
 
-  // --- THIS IS THE FIX ---
-  // Calculate progress for the bar
-  const progressPercent = jobState.totalToProcess > 0 
-    ? (jobState.results.length / jobState.totalToProcess) * 100 
+  const progressPercent = (jobState.totalToProcess || 0) > 0 
+    ? ((jobState.results?.length || 0) / jobState.totalToProcess) * 100 
     : 0;
 
   return (
@@ -192,27 +209,24 @@ export const TaskProgressTable: React.FC<TaskProgressTableProps> = ({
                 onClear={onClear}
               />
               <ExportButton
-                results={jobState.results}
+                results={jobState.results || []}
                 filename="task_bulk_results.csv"
               />
             </div>
           </div>
           
-          {/* --- THIS IS THE FIX: Added Progress Bar here --- */}
           {(isProcessing || isComplete) && (
             <div className="mt-4 space-y-2">
                 <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
-                    <span>{jobState.results.length} / {jobState.totalToProcess} tasks</span>
+                    <span>{jobState.results?.length || 0} / {jobState.totalToProcess || 0} tasks</span>
                 </div>
                 <Progress value={progressPercent} className="h-2" />
             </div>
           )}
-          {/* --- END OF FIX --- */}
 
         </CardHeader>
         <CardContent>
-          {/* --- The JobSummary component is REMOVED from here --- */}
           
           {isProcessing || isComplete ? (
             <DataTable 

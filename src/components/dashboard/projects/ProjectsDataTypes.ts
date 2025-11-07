@@ -1,43 +1,27 @@
-// --- FILE: src/components/dashboard/projects/ProjectsDataTypes.ts (NEW/MODIFIED) ---
+// In src/components/dashboard/projects/ProjectsDataTypes.ts
 
-import { ProjectsJobState, ProjectsJobs } from "@/App";
-
-// --- Types inferred from your existing files ---
-export type { ProjectsJobs, ProjectsJobState };
-
-export interface ZohoProject {
+export interface Project {
   id: string;
   id_string: string;
   name: string;
-  // Add other project properties as needed
+  // Add other project fields if needed
 }
 
-export interface ZohoTask {
+export interface TaskList {
   id: string;
   id_string: string;
   name: string;
-  tasklist: {
-    id: string; // This is the ID we will auto-detect
-    name: string;
-  };
-  // Add other task properties as needed
+  // Add other tasklist fields if needed
 }
 
-// --- NEW INTERFACE FOR TASK LISTS (Used for Single Task Form) ---
-export interface ZohoTaskList {
-  id: string;
-  id_string: string;
-  name: string;
+export interface ProjectsProjectsResult {
+  success: boolean;
+  projects?: Project[];
+  error?: string;
 }
-// --- END NEW INTERFACE ---
 
-// --- NEW INTERFACE FOR CUSTOM FIELDS ---
-export interface ProjectCustomField {
-  label_name: string;
-  column_name: string; // This is the API key
-  field_type: string; // 'Text', 'Numeric', 'Date', 'Picklist' etc.
-  default_value?: any;
-  is_mandatory: boolean;
-  options?: { key: string, value: string }[]; // For picklist
+export interface ProjectsTasksResult {
+  success: boolean;
+  tasklists?: TaskList[];
+  error?: string;
 }
-// --- END NEW INTERFACE ---
