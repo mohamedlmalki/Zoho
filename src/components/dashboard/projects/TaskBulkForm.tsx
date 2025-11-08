@@ -1,5 +1,5 @@
-// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (FULL CODE - FIXED) ---
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'; // Added useCallback
+// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (WITH FINAL STATE FIX) ---
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ProjectsJobState, ZohoProject, ProjectsFormData } from './ProjectsDataTypes'; // Import ProjectsFormData
+import { ProjectsJobState, ZohoProject, ProjectsFormData } from './ProjectsDataTypes';
 import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import {
@@ -29,7 +29,7 @@ import {
 
 // --- Types for the Task Layout (from your Postman response) ---
 interface TaskLayoutField {
-    column_name: string; // <-- THIS IS THE KEY WE MUST USE
+    column_name: string;
     display_name: string;
     i18n_display_name: string;
     column_type: string;
@@ -203,50 +203,51 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
   const [isLoadingLayout, setIsLoadingLayout] = useState(false);
 
-  // --- MODIFIED: Wrapped form handlers in useCallback ---
+  // --- *** THIS IS THE FIX *** ---
   const handleFormDataChange = useCallback((field: keyof ProjectsFormData, value: any) => {
     if (!selectedProfileName) return;
-    setJobs((prev: any) => {
-      if (!prev[selectedProfileName]) {
-        console.error("No profile found in setJobs for handleFormDataChange");
-        return prev;
-      }
+    setJobs((prev) => {
+      // Get the previous job state for this profile,
+      // OR use the 'jobState' prop as the base if it doesn't exist.
+      const prevJobState = prev[selectedProfileName] || jobState;
+
       return {
         ...prev,
         [selectedProfileName]: {
-          ...prev[selectedProfileName],
+          ...prevJobState, // Spread the previous/initial state
           formData: {
-            ...prev[selectedProfileName].formData,
-            [field]: value,
+            ...prevJobState.formData, // Spread the previous/initial form data
+            [field]: value, // Set the new value
           },
         },
       };
     });
-  }, [selectedProfileName, setJobs]); // Dependencies
+  }, [selectedProfileName, setJobs, jobState]); // Add jobState as a dependency
 
+  // --- *** THIS IS THE SECOND FIX *** ---
   const handleDynamicFieldChange = useCallback((columnName: string, value: string) => {
     if (!selectedProfileName) return;
-    setJobs((prev: any) => {
-      if (!prev[selectedProfileName]) {
-        console.error("No profile found in setJobs for handleDynamicFieldChange");
-        return prev;
-      }
+    setJobs((prev) => {
+      // Get the previous job state for this profile,
+      // OR use the 'jobState' prop as the base if it doesn't exist.
+      const prevJobState = prev[selectedProfileName] || jobState;
+      
       return {
         ...prev,
         [selectedProfileName]: {
-          ...prev[selectedProfileName],
+          ...prevJobState,
           formData: {
-            ...prev[selectedProfileName].formData,
+            ...prevJobState.formData,
             bulkDefaultData: {
-              ...prev[selectedProfileName].formData.bulkDefaultData,
+              ...prevJobState.formData.bulkDefaultData,
               [columnName]: value,
             },
           },
         },
       };
     });
-  }, [selectedProfileName, setJobs]); // Dependencies
-  // --- END OF MODIFICATION ---
+  }, [selectedProfileName, setJobs, jobState]); // Add jobState as a dependency
+  // --- *** END OF FIXES *** ---
 
 
   // --- THIS IS THE NEW, COMBINED PROJECT CHANGE HANDLER ---
@@ -268,7 +269,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
   // --- Automatically select the first project ---
   useEffect(() => {
     if (projects.length > 0 && !jobState.formData.projectId) { // Only set if no project is selected
-      // Call the new handler to explicitly set project AND clear fields
       onProjectChange(projects[0].id);
     }
   }, [projects, jobState.formData.projectId, onProjectChange]); // Added onProjectChange
@@ -449,7 +449,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     }
   };
 
-  // --- MODIFIED: `renderField` no longer handles multiline ---
+// --- MODIFIED: `renderField` no longer handles multiline ---
   const renderField = (field: TaskLayoutField) => {
     let inputType = "text";
     if (field.column_type === "date") inputType = "date";
@@ -525,7 +525,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         <div className="grid gap-4">
           
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            {/* 1. Project */}
+            
+            {/* --- THIS IS THE DROPDOWN --- */}
             <div className="grid gap-2">
                 <Label htmlFor="projectId">Project</Label>
                 <Select 
@@ -545,6 +546,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                   </SelectContent>
                 </Select>
             </div>
+            {/* --- END OF DROPDOWN --- */}
             
             {/* 2. Task List ID */}
             <div className="grid gap-2">
@@ -626,8 +628,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                     id="primaryValues"
                     placeholder="Paste your list here, e.g., a list of emails or task names."
                     rows={8}
-                    value={jobState.formData.primaryValues} // Read from global state
-                    onChange={(e) => handleFormDataChange('primaryValues', e.target.value)} // Write to global state
+                    value={jobState.formData.primaryValues} 
+                    onChange={(e) => handleFormDataChange('primaryValues', e.target.value)} 
                     disabled={isProcessing}
                     />
                 </div>

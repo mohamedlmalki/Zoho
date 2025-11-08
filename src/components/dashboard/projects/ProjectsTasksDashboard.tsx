@@ -1,4 +1,4 @@
-// --- FILE: src/components/dashboard/projects/ProjectsTasksDashboard.tsx (FIXED) ---
+// --- FILE: src/components/dashboard/projects/ProjectsTasksDashboard.tsx (WITH UPDATE) ---
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Socket } from 'socket.io-client';
@@ -11,9 +11,11 @@ import { TaskBulkForm } from './TaskBulkForm';
 import { TaskResultsDisplay } from './TaskResultsDisplay';
 import { TaskProgressTable } from './TaskProgressTable';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react'; // <-- Import Save Icon
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type ApiStatus = {
     status: 'loading' | 'success' | 'error';
@@ -60,6 +62,11 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
   const [isDataLoading, setIsDataLoading] = useState(false);
   const [autoTaskListId, setAutoTaskListId] = useState<string | null>(null);
 
+  // --- NEW STATE FOR PROJECT NAME ---
+  const [currentProjectName, setCurrentProjectName] = useState<string>('');
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  // --- END NEW STATE ---
+
   const { data: profiles = [] } = useQuery<Profile[]>({
     queryKey: ['profiles'],
     queryFn: async () => {
@@ -82,12 +89,34 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
   const selectedProfile = projectsProfiles.find(p => p.profileName === activeProfileName) || null;
   const jobState = jobs[activeProfileName || ''] || createInitialJobState();
 
-  useEffect(() => {
-    if (socket && activeProfileName && selectedProfile) {
+  const handleFetchProjects = useCallback(() => {
+      if (socket && activeProfileName && selectedProfile) {
         setIsDataLoading(true);
         socket.emit('getProjectsProjects', { selectedProfileName: activeProfileName });
     }
   }, [socket, activeProfileName, selectedProfile]);
+
+  useEffect(() => {
+    handleFetchProjects();
+  }, [handleFetchProjects]);
+
+  // --- NEW HANDLER: Update Project Name ---
+  const handleUpdateProjectName = useCallback(() => {
+      if (!socket || !activeProfileName || !selectedProfile || !selectedProjectId || !currentProjectName) {
+          toast({ title: "Error", description: "Cannot update, missing data.", variant: "destructive" });
+          return;
+      }
+      setIsUpdatingName(true);
+      socket.emit('updateProjectDetails', {
+          activeProfile: selectedProfile, 
+          portalId: selectedProfile.projects?.portalId,
+          projectId: selectedProjectId,
+          payload: {
+              name: currentProjectName // Send the name from the input box
+          }
+      });
+  }, [socket, activeProfileName, selectedProfile, selectedProjectId, currentProjectName, toast]); 
+
 
   useEffect(() => {
     if (!socket) return;
@@ -105,13 +134,13 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
         if (result.success) {
             setProjects(result.data);
             if (result.data.length > 0) {
-                if (!selectedProjectId) {
+                if (!selectedProjectId || !result.data.find(p => p.id === selectedProjectId)) {
                    setSelectedProjectId(result.data[0].id);
                 }
             } else {
                 setSelectedProjectId(null);
             }
-            toast({ title: "Projects Loaded", description: `${result.data.length} projects found in the portal.` });
+            toast({ title: "Projects Loaded", description: `${result.data.length} projects found.` });
         } else {
             setProjects([]);
             setSelectedProjectId(null);
@@ -123,7 +152,6 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
         setIsDataLoading(false);
         if (result.success) {
             setTasks(result.data);
-            toast({ title: "Tasks Loaded", description: `${result.data.length} tasks found for the selected project.` });
             
             if (result.data.length > 0) {
                 const firstTask = result.data[0];
@@ -141,16 +169,42 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
         }
     };
 
+    // --- NEW LISTENER ---
+    const handleUpdateProjectResult = (result: { success: boolean, data: ZohoProject, error?: string }) => {
+        setIsUpdatingName(false);
+        if (result.success) {
+            setCurrentProjectName(result.data.name);
+            toast({ title: "Project Name Updated!", description: `Set to ${result.data.name}` });
+            // Now, refresh the main project list so dropdowns update
+            handleFetchProjects();
+        } else {
+            toast({ title: "Error Updating Project", description: result.error, variant: "destructive" });
+        }
+    };
+    // --- END NEW LISTENER ---
+
     socket.on('apiStatusResult', handleApiStatus);
     socket.on('projectsProjectsResult', handleProjectsResult); 
     socket.on('projectsTasksResult', handleTasksResult);       
+    
+    // --- BIND NEW LISTENER ---
+    socket.on('projectsUpdateProjectResult', handleUpdateProjectResult);
+    socket.on('projectsUpdateProjectError', (e) => {
+        setIsUpdatingName(false);
+        toast({ title: "Error Updating Project", description: e.error, variant: "destructive" });
+    });
+    // --- END BINDING ---
 
     return () => {
       socket.off('apiStatusResult', handleApiStatus);
       socket.off('projectsProjectsResult', handleProjectsResult);
       socket.off('projectsTasksResult', handleTasksResult);
+      // --- UNBIND NEW LISTENER ---
+      socket.off('projectsUpdateProjectResult', handleUpdateProjectResult);
+      socket.off('projectsUpdateProjectError');
+      // --- END UNBINDING ---
     };
-  }, [socket, toast, selectedProjectId]); 
+  }, [socket, toast, selectedProjectId, handleFetchProjects]); 
 
   const fetchTasks = useCallback(() => {
       if (socket && activeProfileName && selectedProjectId && selectedProfile) {
@@ -169,6 +223,19 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
   useEffect(() => {
       fetchTasks();
   }, [fetchTasks]);
+
+  // --- NEW EFFECT: Set project name when project ID or projects list changes ---
+  useEffect(() => {
+    if (selectedProjectId && projects.length > 0) {
+        const project = projects.find(p => p.id === selectedProjectId);
+        if (project) {
+            setCurrentProjectName(project.name);
+        }
+    } else {
+        setCurrentProjectName('');
+    }
+  }, [selectedProjectId, projects]);
+  // --- END NEW EFFECT ---
 
 
   useEffect(() => {
@@ -272,10 +339,33 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
             <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
             <p className="text-muted-foreground">{description}</p>
             
+            {/* --- UPDATED UI BLOCK --- */}
+            {selectedProfile && selectedProjectId && (
+                <div className="p-4 border rounded-lg bg-card shadow-sm">
+                    <Label htmlFor="projectName" className="text-xs font-semibold text-muted-foreground">Active Project Name</Label>
+                    <div className="flex space-x-2 mt-1">
+                        <Input
+                            id="projectName"
+                            value={currentProjectName}
+                            onChange={(e) => setCurrentProjectName(e.target.value)} // <-- Make it editable
+                            placeholder={"Project Name"}
+                            disabled={isUpdatingName} // <-- Only disable when updating
+                        />
+                        <Button
+                            variant="default"
+                            size="icon"
+                            onClick={handleUpdateProjectName} // <-- Add click handler
+                            disabled={isUpdatingName}
+                        >
+                            {isUpdatingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        </Button>
+                    </div>
+                </div>
+            )}
+            {/* --- END UPDATED UI BLOCK --- */}
+
             {selectedProfile && (
-                // --- FIX #2: Set default tab to "bulk-create" ---
                 <Tabs defaultValue="bulk-create">
-                    {/* --- FIX #1: Added classes to make tabs wide --- */}
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="create">Create Single Task</TabsTrigger>
                         <TabsTrigger value="bulk-create">Bulk Create Tasks</TabsTrigger>
@@ -288,6 +378,8 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
                             projects={projects}
                             socket={socket}
                             onCreateTask={fetchTasks}
+                            selectedProjectId={selectedProjectId} 
+                            setSelectedProjectId={setSelectedProjectId} 
                         />
                     </TabsContent>
 
@@ -330,8 +422,14 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
             
             {!selectedProfile && (
                 <div className="text-center p-10 border rounded-lg">
-                    <p className="font-semibold">No Zoho Projects Profile Selected</p>
-                    <p className="text-sm text-muted-foreground">Please select a profile or add a new one with Projects configuration.</p>
+                    {isDataLoading ? (
+                        <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                    ) : (
+                        <>
+                            <p className="font-semibold">No Zoho Projects Profile Selected</p>
+                            <p className="text-sm text-muted-foreground">Please select a profile or add a new one with Projects configuration.</p>
+                        </>
+                    )}
                 </div>
             )}
         </div>

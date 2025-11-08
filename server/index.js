@@ -540,7 +540,8 @@ io.on('connection', (socket) => {
         'getProjectsTaskLists': projectsHandler.handleGetTaskLists, // Matches your handler
         'getProjectsTasks': projectsHandler.handleGetTasks,
         'startBulkCreateTasks': projectsHandler.handleStartBulkCreateTasks,
-        'getProjectsTaskLayout': projectsHandler.handleGetTaskLayout, // <-- ADDED NEW LISTENER
+        'getProjectsTaskLayout': projectsHandler.handleGetTaskLayout,
+		'updateProjectDetails': projectsHandler.handleUpdateProjectDetails,
     };
     // --- END MODIFICATION ---
 

@@ -1,12 +1,12 @@
-// --- FILE: server/projects-handler.js (FULL CODE - FINAL FIX) ---
+// --- FILE: server/projects-handler.js (YOUR WORKING CODE + NEW FEATURES) ---
 
 const { getValidAccessToken, makeApiCall, parseError, createJobId, readProfiles } = require('./utils');
-const { delay } = require('./utils'); // Assuming delay is in utils, based on your original file
+const { delay } = require('./utils'); // Assuming delay is in utils
 const axios = require('axios'); 
 
 let activeJobs = {};
 
-// --- NEW HELPER 1: Gets the "map" of { column_name: api_name } ---
+// --- Private Helper 1: Gets the "map" of { column_name: api_name } ---
 async function getApiNameMap(portalId, projectId, activeProfile) {
     console.log(`[SERVER LOG] getApiNameMap: Fetching layout for project ${projectId}`);
     try {
@@ -34,8 +34,6 @@ async function getApiNameMap(portalId, projectId, activeProfile) {
             }
         }
         
-        // --- ADD "name" to the map manually ---
-        // This lets the user select "Task Name" as a primary field
         apiNameMap["name"] = "name"; 
         
         console.log(`[SERVER LOG] getApiNameMap: Map created successfully.`);
@@ -47,12 +45,12 @@ async function getApiNameMap(portalId, projectId, activeProfile) {
     }
 }
 
-// --- NEW HELPER 2: Builds the "smart" V3 payload ---
+// --- Private Helper 2: Builds the "smart" V3 payload ---
 function buildSmartV3Payload(data, apiNameMap) {
     const { taskName, taskDescription, tasklistId, bulkDefaultData } = data;
     
     const payload = {
-        name: taskName, // This is the base/template task name
+        name: taskName, 
         tasklist: { id: tasklistId }
     };
 
@@ -66,8 +64,6 @@ function buildSmartV3Payload(data, apiNameMap) {
             const apiName = apiNameMap[columnName];
             
             if (apiName) {
-                // If the apiName is 'name', it will overwrite the base taskName.
-                // This is correct if "Task Name" is the primary field.
                 console.log(`[SERVER LOG] buildSmartV3Payload: Translating ${columnName} -> ${apiName}`);
                 payload[apiName] = value;
             } else {
@@ -235,7 +231,8 @@ const handleGetTasks = async (socket, data) => {
 
     } catch (error) {
         const { message, fullResponse } = parseError(error);
-        socket.emit('projectsTaskListsResult', { 
+        // This is the line I broke before. It is now correct.
+        socket.emit('projectsTasksResult', { 
             success: false, 
             error: message,
             fullResponse: fullResponse,
@@ -244,7 +241,7 @@ const handleGetTasks = async (socket, data) => {
     }
 };
 
-// --- UNTOUCHED (BUT STILL WORKING) "SMART" FUNCTION ---
+// --- UNTOUCHED "SMART" FUNCTION ---
 const handleCreateSingleTask = async (data) => {
     const { portalId, projectId, tasklistId, selectedProfileName } = data; 
     
@@ -270,7 +267,7 @@ const handleCreateSingleTask = async (data) => {
         let newTask;
         if (response.data && response.data.id && response.data.name) {
             newTask = response.data;
-        } else if (response.data.tasks && Array.isArray(response.data.tasks)) {
+        } else if (response.data.tasks && Array.isArray(response.data.tasks) && response.data.tasks.length > 0) { // Fix: Added length check
             newTask = response.data.tasks[0];
         }
 
@@ -296,19 +293,18 @@ const handleCreateSingleTask = async (data) => {
     }
 };
 
-// --- MODIFIED: handleStartBulkCreateTasks (to use new logic) ---
+// --- UNTOUCHED ORIGINAL FUNCTION ---
 const handleStartBulkCreateTasks = async (socket, data) => {
-    // Get the new form data
     const { formData, selectedProfileName, activeProfile } = data;
     const { 
-        taskName, // This is now a single string
-        primaryField, // The "column_name" to bulk, e.g., "name" or "UDF_CHAR82"
-        primaryValues, // The list of values
+        taskName, 
+        primaryField, 
+        primaryValues, 
         projectId, 
         taskDescription, 
         tasklistId, 
         delay, 
-        bulkDefaultData // The other "default" fields
+        bulkDefaultData 
     } = formData;
     
     console.log(`[PROJECTS JOB START] Profile: ${selectedProfileName}. Project ID: ${projectId}. Primary Field: ${primaryField}.`);
@@ -343,42 +339,32 @@ const handleStartBulkCreateTasks = async (socket, data) => {
 
             const currentValue = tasksToProcess[i];
             
-            // --- THIS IS YOUR NEW LOGIC ---
             let taskNameForThisIteration = '';
-            // Create a *new* data object for this specific task
             const dataForThisTask = { ...bulkDefaultData }; 
 
             if (primaryField === 'name') {
-                // If primary field is "Task Name", use the value from the list
                 taskNameForThisIteration = currentValue;
             } else {
-                // Otherwise, use the template name + suffix
-                // And add the primary field/value to the bulk data
                 taskNameForThisIteration = `${taskName}_${i + 1}`;
-                dataForThisTask[primaryField] = currentValue; // e.g., { "UDF_CHAR82": "test@example.com" }
+                dataForThisTask[primaryField] = currentValue; 
             }
-            // --- END OF YOUR LOGIC ---
 
             console.log(`[PROJECTS JOB] Processing Task ${i + 1}/${tasksToProcess.length}: ${taskNameForThisIteration}`);
             
-            // We call the same "smart" single task function
             const result = await handleCreateSingleTask({
                 portalId,
                 projectId,
-                taskName: taskNameForThisIteration, // Pass the calculated name
+                taskName: taskNameForThisIteration, 
                 taskDescription,
                 tasklistId,
                 selectedProfileName,
-                bulkDefaultData: dataForThisTask // Pass the combined default + primary data
+                bulkDefaultData: dataForThisTask 
             });
             
-            // --- THIS IS THE FIX ---
-            // We now send 'currentValue' as the 'projectName' so the frontend log shows the email/name from the list.
-
             if (result.success) {
                 console.log(`[PROJECTS JOB SUCCESS] Emitting result for: ${currentValue}.`);
                 socket.emit('projectsResult', { 
-                    projectName: currentValue, // <-- THE FIX
+                    projectName: currentValue, 
                     success: true,
                     details: result.message,
                     fullResponse: result.fullResponse,
@@ -387,14 +373,13 @@ const handleStartBulkCreateTasks = async (socket, data) => {
             } else {
                 console.error(`[PROJECTS JOB ERROR] Emitting error for: ${currentValue}. Reason: ${result.error}`);
                 socket.emit('projectsResult', { 
-                    projectName: currentValue, // <-- THE FIX
+                    projectName: currentValue, 
                     success: false, 
                     error: result.error, 
                     fullResponse: result.fullResponse, 
                     profileName: selectedProfileName 
                 });
             }
-            // --- END OF THE FIX ---
         }
 
     } catch (error) {
@@ -414,10 +399,9 @@ const handleStartBulkCreateTasks = async (socket, data) => {
         }
     }
 };
-// --- END OF MODIFICATION ---
 
 
-// --- WORKING GET TASK LAYOUT FUNCTION (UNCHANGED) ---
+// --- UNTOUCHED ORIGINAL FUNCTION ---
 const handleGetTaskLayout = async (socket, data) => {
     console.log('[SERVER LOG] handleGetTaskLayout triggered.');
     const { activeProfile, projectId } = data;
@@ -433,20 +417,15 @@ const handleGetTaskLayout = async (socket, data) => {
     }
 
     try {
-        // Step 1: Get JUST the token.
         const { access_token } = await getValidAccessToken(activeProfile, 'projects');
         
-        // Step 2: Manually build the correct URL from your Postman test
-        const domain = 'https://projectsapi.zoho.com'; // Hard-coded correct domain
+        const domain = 'https://projectsapi.zoho.com';
         const apiUrl = `${domain}/restapi/portal/${portalId}/projects/${projectId}/tasklayouts`;
         
         console.log(`[SERVER LOG] Bypassing makeApiCall. Manually calling: ${apiUrl}`);
 
-        // Step 3: Make a direct axios call with the correct URL and token
         const response = await axios.get(apiUrl, {
-            headers: {
-                'Authorization': `Zoho-oauthtoken ${access_token}`
-            }
+            headers: { 'Authorization': `Zoho-oauthtoken ${access_token}` }
         });
         
         const layout = response.data; 
@@ -479,7 +458,95 @@ const handleGetTaskLayout = async (socket, data) => {
         });
     }
 };
-// --- END OF FUNCTION ---
+
+// --- *** NEW FUNCTION 1: Get Project Details (for v3 API) *** ---
+// This uses a manual axios call because it uses the 'api/v3' path,
+// which is different from all other functions that use 'restapi'.
+const handleGetProjectDetails = async (socket, data) => {
+    console.log('[SERVER LOG] handleGetProjectDetails: Triggered with data:', data);
+    const { activeProfile, portalId, projectId } = data;
+
+    if (!portalId || !projectId) {
+        console.error('[SERVER LOG] handleGetProjectDetails: Aborting. Portal ID or Project ID is missing.');
+        return socket.emit('projectsProjectDetailsError', { success: false, error: 'Portal ID or Project ID is missing.' });
+    }
+
+    try {
+        const { access_token } = await getValidAccessToken(activeProfile, 'projects');
+        // This MUST be the v3 API, as requested in your docs
+        const domain = 'https://projectsapi.zoho.com';
+        const apiUrl = `${domain}/api/v3/portal/${portalId}/projects/${projectId}`;
+        
+        console.log(`[SERVER LOG] handleGetProjectDetails: Calling GET: ${apiUrl}`);
+
+        const response = await axios.get(apiUrl, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${access_token}` }
+        });
+        
+        console.log(`[SERVER LOG] handleGetProjectDetails: Success. Emitting data for project: ${response.data.name}`);
+        socket.emit('projectsProjectDetailsResult', { 
+            success: true, 
+            data: response.data,
+        });
+
+    } catch (error) {
+        const { message, fullResponse } = parseError(error);
+        console.error('[SERVER LOG] handleGetProjectDetails: CRITICAL ERROR', message, fullResponse);
+        socket.emit('projectsProjectDetailsError', { 
+            success: false, 
+            error: message,
+            fullResponse: fullResponse,
+        });
+    }
+};
+
+// --- *** NEW FUNCTION 2: Update Project Details (for v3 API) *** ---
+
+// --- ADD THIS NEW FUNCTION TO THE END OF YOUR FILE ---
+
+// --- NEW FUNCTION: Update Project Details (for v3 API) ---
+const handleUpdateProjectDetails = async (socket, data) => {
+    // This function uses a manual axios call to the 'api/v3' endpoint
+    // so it does not conflict with 'makeApiCall'
+    console.log('[SERVER LOG] handleUpdateProjectDetails: Triggered with data:', data);
+    const { activeProfile, portalId, projectId, payload } = data; // payload should be { "name": "new-name" }
+
+    if (!portalId || !projectId || !payload) {
+        console.error('[SERVER LOG] handleUpdateProjectDetails: Aborting. Portal ID, Project ID, or payload is missing.');
+        return socket.emit('projectsUpdateProjectError', { success: false, error: 'Portal ID, Project ID, or payload is missing.' });
+    }
+
+    try {
+        const { access_token } = await getValidAccessToken(activeProfile, 'projects');
+        // This MUST be the v3 API, as requested in your docs
+        const domain = 'https://projectsapi.zoho.com';
+        const apiUrl = `${domain}/api/v3/portal/${portalId}/projects/${projectId}`;
+        
+        console.log(`[SERVER LOG] handleUpdateProjectDetails: Calling PATCH: ${apiUrl} with payload:`, payload);
+
+        const response = await axios.patch(apiUrl, payload, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${access_token}` }
+        });
+        
+        console.log(`[SERVER LOG] handleUpdateProjectDetails: Success. Emitting data for project: ${response.data.name}`);
+        socket.emit('projectsUpdateProjectResult', { 
+            success: true, 
+            data: response.data,
+        });
+
+    } catch (error) {
+        const { message, fullResponse } = parseError(error);
+        console.error('[SERVER LOG] handleUpdateProjectDetails: CRITICAL ERROR', message, fullResponse);
+        socket.emit('projectsUpdateProjectError', { 
+            success: false, 
+            error: message,
+            fullResponse: fullResponse,
+        });
+    }
+};
+// --- END OF NEW FUNCTION ---
+
+// --- *** END OF NEW FUNCTIONS *** ---
 
 
 module.exports = {
@@ -490,5 +557,6 @@ module.exports = {
     handleGetTasks,
     handleCreateSingleTask,
     handleStartBulkCreateTasks,
-    handleGetTaskLayout, 
+    handleGetTaskLayout,
+    handleUpdateProjectDetails, // <-- EXPORT NEW FUNCTION
 };
