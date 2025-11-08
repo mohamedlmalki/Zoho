@@ -127,7 +127,7 @@ export const TaskProgressTable: React.FC<TaskProgressTableProps> = ({
     },
     {
       accessorKey: 'projectName',
-      header: 'Task Name',
+      header: 'email', // <-- CHANGED FROM 'Task Name'
       cell: ({ row }) => (
         <div className="font-medium text-sm">
             {row.original.projectName}
@@ -219,7 +219,7 @@ export const TaskProgressTable: React.FC<TaskProgressTableProps> = ({
                 columns={columns} 
                 data={currentStatus} 
                 filterColumnId="projectName" 
-                filterPlaceholder="Filter task names..."
+                filterPlaceholder="Filter emails..." // <-- CHANGED FROM 'Filter task names...'
             />
           ) : (
             <p className="text-sm text-muted-foreground p-4">

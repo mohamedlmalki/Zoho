@@ -371,26 +371,30 @@ const handleStartBulkCreateTasks = async (socket, data) => {
                 selectedProfileName,
                 bulkDefaultData: dataForThisTask // Pass the combined default + primary data
             });
+            
+            // --- THIS IS THE FIX ---
+            // We now send 'currentValue' as the 'projectName' so the frontend log shows the email/name from the list.
 
             if (result.success) {
-                console.log(`[PROJECTS JOB SUCCESS] Emitting result for: ${taskNameForThisIteration}.`);
+                console.log(`[PROJECTS JOB SUCCESS] Emitting result for: ${currentValue}.`);
                 socket.emit('projectsResult', { 
-                    projectName: taskNameForThisIteration, // Use the unique name
+                    projectName: currentValue, // <-- THE FIX
                     success: true,
                     details: result.message,
                     fullResponse: result.fullResponse,
                     profileName: selectedProfileName
                 });
             } else {
-                console.error(`[PROJECTS JOB ERROR] Emitting error for: ${taskNameForThisIteration}. Reason: ${result.error}`);
+                console.error(`[PROJECTS JOB ERROR] Emitting error for: ${currentValue}. Reason: ${result.error}`);
                 socket.emit('projectsResult', { 
-                    projectName: taskNameForThisIteration, 
+                    projectName: currentValue, // <-- THE FIX
                     success: false, 
                     error: result.error, 
                     fullResponse: result.fullResponse, 
                     profileName: selectedProfileName 
                 });
             }
+            // --- END OF THE FIX ---
         }
 
     } catch (error) {

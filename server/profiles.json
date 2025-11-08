@@ -191,5 +191,38 @@
     "projects": {
       "portalId": "905175646"
     }
+  },
+  {
+    "profileName": "projects 3",
+    "clientId": "1000.UOG7WFZ6FS0N0SBEAWHZ8YKONE48KH",
+    "clientSecret": "8469c13f08c49889f65f775b838cc22e6887f469a6",
+    "refreshToken": "1000.c7ff9c6b13e89b2c77ed8992e5395d48.db3a5b5aa841045dd88e96482df08aba",
+    "desk": {
+      "orgId": "",
+      "defaultDepartmentId": "",
+      "fromEmailAddress": "",
+      "mailReplyAddressId": ""
+    },
+    "inventory": {
+      "orgId": ""
+    },
+    "catalyst": {
+      "projectId": "",
+      "fromEmail": ""
+    },
+    "qntrl": {
+      "orgId": ""
+    },
+    "people": {
+      "orgId": ""
+    },
+    "creator": {
+      "baseUrl": "www.zohoapis.com",
+      "ownerName": "",
+      "appName": ""
+    },
+    "projects": {
+      "portalId": "905405940"
+    }
   }
 ]
