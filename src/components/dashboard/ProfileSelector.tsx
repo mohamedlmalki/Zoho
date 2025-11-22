@@ -1,5 +1,5 @@
 // --- FILE: src/components/dashboard/ProfileSelector.tsx (FIXED) ---
-import React, { useEffect } from 'react'; 
+import React, { useEffect, useMemo } from 'react'; // --- ADDED 'useMemo' ---
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { User, Building, AlertCircle, CheckCircle, Loader, RefreshCw, Activity, Edit, Trash2 } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 // --- FIX: Import ALL job types, including new ones ---
-import { Profile, Jobs as TicketJobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs } from '@/App'; 
+import { Profile, Jobs as TicketJobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,9 +26,9 @@ type ApiStatus = {
     fullResponse?: any;
 };
 
-// --- FIX: Add 'projects' and 'creator' to the types ---
-type AllJobs = TicketJobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs;
-type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects';
+// --- FIX: Add 'WebinarJobs' and 'meeting' to the types ---
+type AllJobs = TicketJobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs;
+type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting';
 
 interface ProfileSelectorProps {
   profiles: Profile[];
@@ -69,6 +69,23 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
     }
   }, [selectedProfile?.profileName, socket?.connected, service, socket]);
 
+  // --- ADDED: FILTERING LOGIC ---
+  const filteredProfiles = useMemo(() => {
+    if (!service) return profiles; // If no service specified, show all
+    return profiles.filter(p => {
+      if (service === 'desk') return p.desk && p.desk.orgId;
+      if (service === 'inventory') return p.inventory && p.inventory.orgId;
+      if (service === 'catalyst') return p.catalyst && p.catalyst.projectId;
+      if (service === 'qntrl') return p.qntrl && p.qntrl.orgId;
+      if (service === 'people') return p.people;
+      if (service === 'creator') return p.creator && p.creator.appName && p.creator.ownerName;
+      if (service === 'projects') return p.projects && p.projects.portalId;
+      if (service === 'meeting') return p.meeting; // This will show profiles with a 'meeting' object
+      return true; // Default
+    });
+  }, [profiles, service]);
+  // --- END ADDED ---
+
   const getBadgeProps = () => {
     // --- FIX: Add a safety check in case apiStatus is undefined during render ---
     if (!apiStatus) {
@@ -84,9 +101,9 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
         return { text: 'Checking...', variant: 'secondary' as const, icon: <Loader className="h-4 w-4 mr-2 animate-spin" /> };
     }
   };
-  
+ 
   const badgeProps = getBadgeProps();
-  
+ 
   const getTotalToProcess = (job: any) => {
     return job.totalTicketsToProcess || job.totalToProcess || 0;
   }
@@ -137,13 +154,20 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
             <Select 
               value={selectedProfile?.profileName || ''} 
               onValueChange={onProfileChange}
-              disabled={profiles.length === 0}
+              disabled={filteredProfiles.length === 0} // --- MODIFIED: disabled if list is empty ---
             >
               <SelectTrigger className="h-12 bg-muted/50 border-border hover:bg-muted transition-colors flex-1">
                 <SelectValue placeholder="Select a profile..." />
               </SelectTrigger>
               <SelectContent className="bg-card border-border shadow-large">
-                {profiles.map((profile) => {
+                {/* --- ADDED: Message for no profiles --- */}
+                {filteredProfiles.length === 0 && (
+                  <div className="p-2 text-sm text-muted-foreground text-center">
+                    No profiles found for this service.
+                  </div>
+                )}
+                {/* --- MODIFIED: Use 'filteredProfiles' --- */}
+                {filteredProfiles.map((profile) => {
                   const job = (jobs as AllJobs)[profile.profileName]; // Cast to AllJobs
                   const isJobActive = job && job.isProcessing;
                   return (
@@ -175,7 +199,7 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
             <div className="p-4 bg-gradient-muted rounded-lg border border-border">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-foreground"></span>
-                
+               
                 <div className="flex items-center space-x-2">
                   <Button variant={badgeProps.variant} size="sm" onClick={onShowStatus}>
                       {badgeProps.icon}
@@ -198,7 +222,7 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
                       <>
                           <span className="text-muted-foreground">Agent Name:</span>
                           <span className="font-medium text-foreground text-right truncate">{apiStatus.fullResponse.agentInfo.firstName} {apiStatus.fullResponse.agentInfo.lastName}</span>
-                          
+                         
                           <span className="text-muted-foreground">Organization:</span>
                           <span className="font-medium text-foreground text-right truncate">{apiStatus.fullResponse.orgName}</span>
                       </>

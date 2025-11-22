@@ -1,3 +1,4 @@
+// --- FILE: src/components/dashboard/ProfileModal.tsx (MODIFIED) ---
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -5,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Profile } from '@/App';
 import { useToast } from '@/hooks/use-toast';
-import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search } from 'lucide-react';
+// --- ADDED 'Video' icon ---
+import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { Separator } from '../ui/separator';
 import {
@@ -67,6 +69,11 @@ const getInitialFormData = (): Profile => ({
   projects: {
     portalId: '',
   },
+  // --- ADDED ---
+  meeting: {
+    zsoid: '',
+  },
+  // --- END ADDED ---
 });
 
 
@@ -93,6 +100,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 people: { ...getInitialFormData().people, ...profile.people },
                 creator: { ...getInitialFormData().creator, ...profile.creator },
                 projects: { ...getInitialFormData().projects, ...profile.projects },
+                // --- ADDED ---
+                meeting: { ...getInitialFormData().meeting, ...profile.meeting },
+                // --- END ADDED ---
             });
         } else {
             setFormData(getInitialFormData());
@@ -165,7 +175,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects', e: React.ChangeEvent<HTMLInputElement>) => {
+  // --- MODIFIED ---
+  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting', e: React.ChangeEvent<HTMLInputElement>) => {
+  // --- END MODIFIED ---
     const { name, value } = e.target;
     setFormData(prev => ({
         ...prev,
@@ -175,7 +187,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
         }
     }));
   };
-  
+ 
   const handleCreatorSelectChange = (name: string, value: string) => {
     setFormData(prev => ({
         ...prev,
@@ -204,7 +216,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
         toast({ title: "Error", description: "Not connected to the server.", variant: "destructive" });
         return;
     }
-    
+   
     setIsGenerating(true);
 
     try {
@@ -286,12 +298,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
               </div>
             </div>
           </div>
-          
+         
           <Separator className="my-4" />
 
           {/* --- 2-COLUMN GRID FOR SERVICES --- */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            
+           
             {/* --- COLUMN 1 --- */}
             <div className="space-y-6">
               {/* --- ZOHO DESK SETTINGS --- */}
@@ -319,7 +331,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
-              
+             
               {/* --- ZOHO CATALYST SETTINGS --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">
@@ -337,7 +349,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
-              
+             
               {/* --- ZOHO PEOPLE SETTINGS --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">
@@ -351,8 +363,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
+
+              {/* --- ZOHO MEETING SETTINGS (ADDED) --- */}
+              <div>
+                <h4 className="text-sm font-semibold mb-4 flex items-center">
+                  <Video className="h-4 w-4 mr-2" />
+                  Zoho Meeting Settings
+                </h4>
+                <div className="grid gap-4 pl-4 border-l-2 ml-2">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="meeting_zsoid" className="text-right">Org ID (zsoid)</Label>
+                    <Input id="meeting_zsoid" name="zsoid" value={formData.meeting?.zsoid || ''} onChange={(e) => handleNestedChange('meeting', e)} className="col-span-3" placeholder="(Optional) e.g., 1000XXXX" />
+                    </div>
+                </div>
+              </div>
+              {/* --- END ADDED --- */}
+
             </div>
-            
+           
             {/* --- COLUMN 2 --- */}
             <div className="space-y-6">
               {/* --- ZOHO INVENTORY SETTINGS --- */}
@@ -368,7 +396,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
-              
+             
               {/* --- ZOHO QNTRL SETTINGS --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">
@@ -382,7 +410,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
-              
+             
               {/* --- ZOHO CREATOR SETTINGS --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">

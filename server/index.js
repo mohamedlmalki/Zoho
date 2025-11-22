@@ -1,4 +1,4 @@
-// --- FILE: server/index.js (FULL CODE) ---
+// --- FILE: server/index.js (MODIFIED) ---
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -11,8 +11,8 @@ const catalystHandler = require('./catalyst-handler');
 const qntrlHandler = require('./qntrl-handler');
 const peopleHandler = require('./people-handler');
 const creatorHandler = require('./creator-handler');
-// --- ADDED PROJECTS HANDLER ---
 const projectsHandler = require('./projects-handler');
+const meetingHandler = require('./meeting-handler');
 require('dotenv').config();
 
 const app = express();
@@ -30,8 +30,8 @@ catalystHandler.setActiveJobs(activeJobs);
 qntrlHandler.setActiveJobs(activeJobs);
 peopleHandler.setActiveJobs(activeJobs);
 creatorHandler.setActiveJobs(activeJobs);
-// --- ADDED PROJECTS HANDLER ---
 projectsHandler.setActiveJobs(activeJobs);
+meetingHandler.setActiveJobs(activeJobs);
 
 
 const authStates = {};
@@ -60,9 +60,7 @@ app.post('/api/zoho/auth', (req, res) => {
         'ZOHOPEOPLE.organization.READ,ZOHOPEOPLE.employee.ALL,ZOHOPEOPLE.forms.ALL',
         'ZohoCreator.form.CREATE,ZohoCreator.report.CREATE,ZohoCreator.report.READ,ZohoCreator.report.UPDATE,ZohoCreator.report.DELETE,ZohoCreator.meta.form.READ,ZohoCreator.meta.application.READ,ZohoCreator.dashboard.READ',
         
-        // --- FINAL EXHAUSTIVE ZOHO PROJECTS SCOPES (Guaranteed to cover all read/write and setup needs) ---
-        // This includes all ALL scopes and the specific READ/CREATE ones where ALL might conflict or not exist.
-		'ZohoProjects.tasklists.READ',
+        'ZohoProjects.tasklists.READ',
         'ZohoProjects.portals.ALL',
         'ZohoProjects.projects.ALL',
         'ZohoProjects.milestones.ALL',
@@ -84,14 +82,19 @@ app.post('/api/zoho/auth', (req, res) => {
         'ZohoProjects.extensions.UPDATE',
         'ZohoProjects.extensions.DELETE',
         
-        // --- Accessory Scopes (File/Search) ---
+        'ZohoMeeting.manageOrg.READ',
+        'ZohoMeeting.webinar.READ',
+        'ZohoMeeting.webinar.DELETE',
+        'ZohoMeeting.webinar.UPDATE',
+        'ZohoMeeting.webinar.CREATE',
+        'ZohoMeeting.user.READ',
+		
         'WorkDrive.workspace.ALL',
         'WorkDrive.files.ALL',
         'ZohoPC.files.ALL',
         'ZohoSearch.securesearch.READ',
         'ZohoSheet.dataAPI.READ',
         
-        // --- Bugtracker Scopes (Keeping ALL where applicable) ---
         'ZohoBugtracker.portals.READ',
         'ZohoBugtracker.projects.ALL',
         'ZohoBugtracker.milestones.ALL',
@@ -374,6 +377,23 @@ io.on('connection', (socket) => {
                     portalData: portalResponse.data 
                 };
             }
+            // --- MODIFIED: ZOHO MEETING API STATUS CHECK ---
+            else if (service === 'meeting') {
+                // --- FIX: Using the correct endpoint you provided ---
+                const userDetailsResponse = await makeApiCall('get', '/api/v2/user.json', null, activeProfile, 'meeting');
+                
+                // Assuming response structure based on other Zoho APIs and your docs
+                const userData = userDetailsResponse.data; // The root object might be the user
+                validationData = { 
+                    orgName: userData.organization?.org_name || 'Zoho Meeting Org',
+                    agentInfo: { 
+                        firstName: userData.first_name || 'Meeting User', 
+                        lastName: userData.last_name || '' 
+                    },
+                    userData: userData
+                };
+            }
+            // --- END MODIFIED ---
 
             socket.emit('apiStatusResult', { 
                 success: true, 
@@ -555,7 +575,7 @@ io.on('connection', (socket) => {
                     handler(socket, { ...data, activeProfile });
                 } else {
                     console.error(`[ERROR] Handler for event '${event}' is not a function.`);
-                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
+                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.'` });
                 }
             } else {
                  // Emit error if profile not found, except for portal fetch which uses temp credentials
@@ -568,6 +588,30 @@ io.on('connection', (socket) => {
             }
         });
     }
+
+    // --- ADDED: Zoho Meeting Listeners ---
+    const meetingListeners = {
+        'fetchWebinars': meetingHandler.handleGetWebinars,
+        'startBulkRegistration': meetingHandler.handleStartBulkRegistration,
+    };
+
+    for (const [event, handler] of Object.entries(meetingListeners)) {
+        socket.on(event, (data) => {
+            const profiles = readProfiles();
+            const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
+            if (activeProfile) {
+                if (typeof handler === 'function') {
+                    handler(socket, { ...data, activeProfile });
+                } else {
+                    console.error(`[ERROR] Handler for event '${event}' is not a function.`);
+                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
+                }
+            } else {
+                 socket.emit('bulkError', { message: 'Active profile not found.' });
+            }
+        });
+    }
+    // --- END ADDED ---
 });
 
 

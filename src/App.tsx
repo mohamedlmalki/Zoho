@@ -1,4 +1,4 @@
-// --- FILE: src/App.tsx (FULL CODE) ---
+// --- FILE: src/App.tsx (MODIFIED) ---
 import React, { useState, useEffect, useRef } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -25,6 +25,7 @@ import BulkQntrlCards from './pages/BulkQntrlCards';
 import PeopleForms from './pages/PeopleForms'; 
 import CreatorForms from './pages/CreatorForms';
 import ProjectsTasksPage from './pages/ProjectsTasksPage';
+import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
 
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
@@ -61,7 +62,11 @@ export interface Profile {
   projects?: {
     portalId: string;
   };
+  meeting?: {
+    zsoid?: string;
+  };
 }
+// ... (All other interfaces like TicketFormData, InvoiceFormData, etc. are unchanged) ...
 export interface TicketFormData {
   emails: string;
   subject: string;
@@ -263,22 +268,18 @@ export interface CreatorJobs {
     [profileName: string]: CreatorJobState;
 }
 
-// --- MODIFIED ProjectsFormData INTERFACE ---
 export interface ProjectsFormData {
-  taskName: string; // CHANGED: Was taskNames (list), now a single string
-  primaryField: string; // NEW: The column_name of the field to use for bulk, e.g., "name" or "UDF_CHAR82"
-  primaryValues: string; // NEW: The list of values for the primary field
-  
+  taskName: string; 
+  primaryField: string;
+  primaryValues: string;
   taskDescription: string;
   projectId: string;
   tasklistId: string;
   delay: number;
   bulkDefaultData: { [key: string]: string }; 
-  emails?: string; // Dummy property for ExportButton compatibility
+  emails?: string;
   displayName?: string; 
 }
-// --- END OF MODIFICATION ---
-
 export interface ProjectsResult {
   projectName: string; 
   success: boolean;
@@ -303,6 +304,42 @@ export interface ProjectsJobs {
     [profileName: string]: ProjectsJobState;
 }
 
+export interface WebinarFormData {
+  webinarId: string;
+  webinar: any | null;
+  emails: string;
+  firstName: string;
+  delay: number;
+  displayName?: string;
+}
+export interface WebinarResult {
+  email: string;
+  success: boolean;
+  details?: string;
+  error?: string;
+  fullResponse?: any;
+  displayName?: string;
+  subject?: string;
+  number?: number; // <-- ADDED
+}
+export interface WebinarJobState {
+    formData: WebinarFormData; 
+    results: WebinarResult[];
+    isProcessing: boolean;
+    isPaused: boolean;
+    isComplete: boolean;
+    processingStartTime: Date | null;
+    processingTime: number;
+    totalToProcess: number;
+    countdown: number;
+    currentDelay: number;
+    filterText: string;
+}
+export interface WebinarJobs {
+    [profileName: string]: WebinarJobState;
+}
+
+// ... (All createInitial...State functions are unchanged) ...
 const createInitialJobState = (): JobState => ({
   formData: {
     emails: '',
@@ -439,13 +476,11 @@ const createInitialCreatorJobState = (): CreatorJobState => ({
     currentDelay: 1,
     filterText: '',
 });
-
-// --- MODIFIED createInitialProjectsJobState ---
 const createInitialProjectsJobState = (): ProjectsJobState => ({
     formData: {
-        taskName: '', // CHANGED: Was taskNames
-        primaryField: 'name', // NEW: Default to "name"
-        primaryValues: '', // NEW
+        taskName: '',
+        primaryField: 'name',
+        primaryValues: '',
         taskDescription: '',
         projectId: '',
         tasklistId: '',
@@ -464,7 +499,27 @@ const createInitialProjectsJobState = (): ProjectsJobState => ({
     currentDelay: 1,
     filterText: '',
 });
-// --- END OF MODIFICATION ---
+
+const createInitialWebinarJobState = (): WebinarJobState => ({
+    formData: {
+        webinarId: '',
+        webinar: null,
+        emails: '',
+        firstName: '',
+        delay: 1,
+        displayName: 'webinar_registrations',
+    },
+    results: [],
+    isProcessing: false,
+    isPaused: false,
+    isComplete: false,
+    processingStartTime: null,
+    processingTime: 0,
+    totalToProcess: 0,
+    countdown: 0,
+    currentDelay: 1,
+    filterText: '',
+});
 
 
 const MainApp = () => {
@@ -477,6 +532,7 @@ const MainApp = () => {
     const [peopleJobs, setPeopleJobs] = useState<PeopleJobs>({});
     const [creatorJobs, setCreatorJobs] = useState<CreatorJobs>({});
     const [projectsJobs, setProjectsJobs] = useState<ProjectsJobs>({});
+    const [webinarJobs, setWebinarJobs] = useState<WebinarJobs>({});
     const socketRef = useRef<Socket | null>(null);
     const queryClient = useQueryClient();
 
@@ -491,6 +547,7 @@ const MainApp = () => {
     useJobTimer(peopleJobs, setPeopleJobs, 'people');
     useJobTimer(creatorJobs, setCreatorJobs, 'creator');
     useJobTimer(projectsJobs, setProjectsJobs, 'projects');
+    useJobTimer(webinarJobs, setWebinarJobs, 'webinar');
 
     useEffect(() => {
         const socket = io(SERVER_URL);
@@ -500,6 +557,7 @@ const MainApp = () => {
             toast({ title: "Connected to server!" });
         });
         
+        // ... (All other socket.on listeners are unchanged) ...
         socket.on('ticketResult', (result: TicketResult & { profileName: string }) => {
           setJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialJobState();
@@ -613,7 +671,6 @@ const MainApp = () => {
             };
           });
         });
-        
         socket.on('projectsResult', (result: ProjectsResult & { profileName: string }) => {
           setProjectsJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialProjectsJobState();
@@ -631,8 +688,35 @@ const MainApp = () => {
           });
         });
 
+        // --- MODIFIED: 'webinarResult' listener ---
+        socket.on('webinarResult', (result: WebinarResult & { profileName: string }) => {
+          setWebinarJobs(prevJobs => {
+            const profileJob = prevJobs[result.profileName] || createInitialWebinarJobState();
+            
+            // --- THIS IS THE NEW LOGIC ---
+            const newResult = {
+                ...result,
+                number: profileJob.results.length + 1 // Add the number
+            };
+            // Add new result to the START of the list
+            const newResults = [newResult, ...profileJob.results]; 
+            // --- END NEW LOGIC ---
 
-        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects'}, title: string, description: string, variant?: "destructive") => {
+            const isLast = newResults.length >= profileJob.totalToProcess;
+            return {
+              ...prevJobs,
+              [result.profileName]: {
+                ...profileJob,
+                results: newResults, // Use new list
+                countdown: isLast ? 0 : profileJob.currentDelay, 
+              }
+            };
+          });
+        });
+        // --- END MODIFIED ---
+
+
+        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar'}, title: string, description: string, variant?: "destructive") => {
             const { profileName, jobType } = data;
             
             const getInitialState = (type: string) => {
@@ -645,6 +729,7 @@ const MainApp = () => {
                     case 'people': return createInitialPeopleJobState();
                     case 'creator': return createInitialCreatorJobState();
                     case 'projects': return createInitialProjectsJobState();
+                    case 'webinar': return createInitialWebinarJobState();
                     default: return {} as any;
                 }
             };
@@ -671,6 +756,7 @@ const MainApp = () => {
             else if (jobType === 'people') setPeopleJobs(updater);
             else if (jobType === 'creator') setCreatorJobs(updater);
             else if (jobType === 'projects') setProjectsJobs(updater);
+            else if (jobType === 'webinar') setWebinarJobs(updater);
             
             toast({ title, description, variant });
         };
@@ -684,6 +770,7 @@ const MainApp = () => {
         };
     }, [toast]);
     
+    // ... (All handler functions like handleOpenAddProfile, handleSaveProfile, etc. are unchanged) ...
     const handleOpenAddProfile = () => {
         setEditingProfile(null);
         setIsProfileModalOpen(true);
@@ -895,6 +982,21 @@ const MainApp = () => {
                                 setJobs={setProjectsJobs}
                                 socket={socketRef.current}
                                 createInitialJobState={createInitialProjectsJobState}
+                                onAddProfile={handleOpenAddProfile}
+                                onEditProfile={handleOpenEditProfile}
+                                onDeleteProfile={handleDeleteProfile}
+                            />
+                        }
+                    />
+                    
+                    <Route
+                        path="/bulk-webinar-registration"
+                        element={
+                            <BulkWebinarRegistration
+                                jobs={webinarJobs}
+                                setJobs={setWebinarJobs}
+                                socket={socketRef.current}
+                                createInitialJobState={createInitialWebinarJobState}
                                 onAddProfile={handleOpenAddProfile}
                                 onEditProfile={handleOpenEditProfile}
                                 onDeleteProfile={handleDeleteProfile}

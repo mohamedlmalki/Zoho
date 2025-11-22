@@ -1,4 +1,4 @@
-// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (WITH FINAL STATE FIX) ---
+// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (FIXED) ---
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ProjectsJobState, ZohoProject, ProjectsFormData } from './ProjectsDataTypes';
-import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye } from 'lucide-react';
+// --- Added Save icon ---
+import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye, Save } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import {
     DropdownMenu,
@@ -50,7 +51,6 @@ interface TaskLayout {
 }
 // --- END NEW TYPES ---
 
-// --- ADDED: Image Tool Dialog Component ---
 const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
     const [imageUrl, setImageUrl] = useState('');
     const [altText, setAltText] = useState('');
@@ -73,7 +73,6 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
         
         onApply(finalHtml);
         setIsOpen(false);
-        // Reset fields
         setImageUrl('');
         setAltText('');
         setLinkUrl('');
@@ -136,9 +135,9 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
         </Dialog>
     );
 };
-// --- END OF ADDED COMPONENT ---
 
 
+// --- vvv NEW PROPS ADDED HERE vvv ---
 interface TaskBulkFormProps {
   selectedProfileName: string | null;
   projects: ZohoProject[];
@@ -146,9 +145,15 @@ interface TaskBulkFormProps {
   jobState: ProjectsJobState;
   setJobs: React.Dispatch<React.SetStateAction<any>>;
   autoTaskListId: string | null;
+  selectedProjectId: string | null;
+  currentProjectName: string;
+  setCurrentProjectName: React.Dispatch<React.SetStateAction<string>>;
+  isUpdatingName: boolean;
+  handleUpdateProjectName: () => void;
 }
+// --- ^^^ NEW PROPS ADDED HERE ^^^ ---
 
-// --- JobSummary component is INSIDE this file (like your original) ---
+
 const JobSummary: React.FC<{ jobState: ProjectsJobState }> = ({ jobState }) => {
     const { 
         results,
@@ -192,7 +197,14 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     socket, 
     jobState, 
     setJobs, 
-    autoTaskListId 
+    autoTaskListId,
+    // --- vvv RECEIVE NEW PROPS vvv ---
+    selectedProjectId,
+    currentProjectName,
+    setCurrentProjectName,
+    isUpdatingName,
+    handleUpdateProjectName
+    // --- ^^^ RECEIVE NEW PROPS ^^^ ---
 }) => {
   const { toast } = useToast();
   const isProcessing = jobState.isProcessing;
@@ -203,35 +215,27 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
   const [isLoadingLayout, setIsLoadingLayout] = useState(false);
 
-  // --- *** THIS IS THE FIX *** ---
   const handleFormDataChange = useCallback((field: keyof ProjectsFormData, value: any) => {
     if (!selectedProfileName) return;
     setJobs((prev) => {
-      // Get the previous job state for this profile,
-      // OR use the 'jobState' prop as the base if it doesn't exist.
       const prevJobState = prev[selectedProfileName] || jobState;
-
       return {
         ...prev,
         [selectedProfileName]: {
-          ...prevJobState, // Spread the previous/initial state
+          ...prevJobState, 
           formData: {
-            ...prevJobState.formData, // Spread the previous/initial form data
-            [field]: value, // Set the new value
+            ...prevJobState.formData, 
+            [field]: value, 
           },
         },
       };
     });
-  }, [selectedProfileName, setJobs, jobState]); // Add jobState as a dependency
+  }, [selectedProfileName, setJobs, jobState]); 
 
-  // --- *** THIS IS THE SECOND FIX *** ---
   const handleDynamicFieldChange = useCallback((columnName: string, value: string) => {
     if (!selectedProfileName) return;
     setJobs((prev) => {
-      // Get the previous job state for this profile,
-      // OR use the 'jobState' prop as the base if it doesn't exist.
       const prevJobState = prev[selectedProfileName] || jobState;
-      
       return {
         ...prev,
         [selectedProfileName]: {
@@ -246,35 +250,23 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         },
       };
     });
-  }, [selectedProfileName, setJobs, jobState]); // Add jobState as a dependency
-  // --- *** END OF FIXES *** ---
+  }, [selectedProfileName, setJobs, jobState]); 
 
-
-  // --- THIS IS THE NEW, COMBINED PROJECT CHANGE HANDLER ---
   const onProjectChange = useCallback((newProjectId: string) => {
-    // 1. Set the new project ID
     handleFormDataChange('projectId', newProjectId);
-    
-    // 2. Clear the old layout data to trigger a re-fetch
     setAllFields([]);
     setTaskLayout(null);
-    
-    // 3. Reset the form fields that depend on the layout
     handleFormDataChange('bulkDefaultData', {});
     handleFormDataChange('primaryField', 'name');
-  }, [handleFormDataChange]); // Depends on the stable handleFormDataChange
-  // --- END OF NEW HANDLER ---
+  }, [handleFormDataChange]); 
 
-
-  // --- Automatically select the first project ---
   useEffect(() => {
-    if (projects.length > 0 && !jobState.formData.projectId) { // Only set if no project is selected
+    if (projects.length > 0 && !jobState.formData.projectId) { 
       onProjectChange(projects[0].id);
     }
-  }, [projects, jobState.formData.projectId, onProjectChange]); // Added onProjectChange
+  }, [projects, jobState.formData.projectId, onProjectChange]); 
 
 
-  // --- UNCHANGED: Effect to listen for layout results ---
   useEffect(() => {
     if (!socket) return;
 
@@ -282,17 +274,14 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         setIsLoadingLayout(false);
         if (result.success && result.data) {
             setTaskLayout(result.data);
-            
             const all = result.data.section_details.flatMap(section => section.customfield_details);
             const customOnly = all.filter(field => !field.is_default);
             setAllFields(customOnly);
-
             const initialVisibility = customOnly.reduce((acc, field) => {
                 acc[field.column_name] = true;
                 return acc;
             }, {} as Record<string, boolean>);
             setVisibleFields(initialVisibility);
-
         } else {
             toast({ title: 'Error fetching task layout', description: result.message || result.error, variant: 'destructive' });
             setTaskLayout(null);
@@ -315,11 +304,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
   }, [socket, toast]);
 
 
-  // --- SIMPLIFIED: Effect to fetch layout ---
   useEffect(() => {
     const currentProjectId = jobState.formData.projectId;
-
-    // Only fetch if we have a project ID and NO layout data
     if (socket && selectedProfileName && currentProjectId && !taskLayout) {
       setIsLoadingLayout(true);
       socket.emit('getProjectsTaskLayout', {
@@ -327,16 +313,12 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
           projectId: currentProjectId
       });
     }
-  }, [socket, selectedProfileName, jobState.formData.projectId, taskLayout]); // Simplified dependencies
-  // --- END OF SIMPLIFIED EFFECT ---
+  }, [socket, selectedProfileName, jobState.formData.projectId, taskLayout]); 
 
-
-  // --- Generate Primary Field Options ---
   const primaryFieldOptions = useMemo(() => {
     const options = [
       { value: 'name', label: 'Task Name' }
     ];
-
     if (allFields.length > 0) {
       allFields.forEach(field => {
           options.push({
@@ -348,24 +330,20 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     return options;
   }, [allFields]);
 
-  // --- MODIFIED EFFECT: Set default primary field to 'email' if found (and not already set) ---
   useEffect(() => {
-    // Only run if fields are loaded AND primaryField is still default 'name'
     if (allFields.length > 0 && jobState.formData.primaryField === 'name') {
       const emailField = allFields.find(field => 
         field.display_name.toLowerCase().includes('email') || 
         field.i18n_display_name.toLowerCase().includes('email')
       );
-      
       if (emailField) {
         handleFormDataChange('primaryField', emailField.column_name);
       }
     }
-  }, [allFields, jobState.formData.primaryField, handleFormDataChange]); // Added handleFormDataChange
-  // --- END NEW EFFECT ---
+  }, [allFields, jobState.formData.primaryField, handleFormDataChange]); 
 
   const handleStart = () => {
-    const { projectId, primaryValues, delay } = jobState.formData; // Read from global state
+    const { projectId, primaryValues, delay } = jobState.formData; 
 
     if (!selectedProfileName || !projectId || !autoTaskListId) {
       return toast({
@@ -390,8 +368,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     }
 
     const formData: ProjectsFormData = {
-      ...jobState.formData, // Get all the persistent form data
-      tasklistId: autoTaskListId, // Add the non-persistent tasklistId
+      ...jobState.formData, 
+      tasklistId: autoTaskListId, 
       displayName: selectedProfileName,
     };
 
@@ -399,7 +377,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
       ...prevJobs,
       [selectedProfileName]: {
         ...jobState,
-        formData, // <-- Set the complete formData
+        formData, 
         totalToProcess: tasksToProcess.length,
         isProcessing: true,
         isPaused: false,
@@ -413,8 +391,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
 
     socket.emit('startBulkCreateTasks', {
         selectedProfileName,
-        activeProfile: { projects: { portalId: projects.find(p => p.id === projectId)?.portal_id } }, // Send portalId
-        formData: formData // Send the whole form data object
+        activeProfile: { projects: { portalId: projects.find(p => p.id === projectId)?.portal_id } }, 
+        formData: formData 
     });
     
     toast({ title: 'Bulk Task Job Started', description: `${tasksToProcess.length} tasks queued.` });
@@ -449,7 +427,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     }
   };
 
-// --- MODIFIED: `renderField` no longer handles multiline ---
   const renderField = (field: TaskLayoutField) => {
     let inputType = "text";
     if (field.column_type === "date") inputType = "date";
@@ -461,7 +438,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     if (field.column_type === "picklist") {
          return <Input 
             placeholder={field.i18n_display_name} 
-            value={jobState.formData.bulkDefaultData[fieldKey] || ''} // Read from global state
+            value={jobState.formData.bulkDefaultData[fieldKey] || ''} 
             onChange={(e) => handleDynamicFieldChange(fieldKey, e.target.value)}
             disabled={isProcessing}
          />
@@ -470,12 +447,11 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     return <Input 
         type={inputType} 
         placeholder={field.i18n_display_name} 
-        value={jobState.formData.bulkDefaultData[fieldKey] || ''} // Read from global state
+        value={jobState.formData.bulkDefaultData[fieldKey] || ''} 
         onChange={(e) => handleDynamicFieldChange(fieldKey, e.target.value)}
         disabled={isProcessing}
     />
   };
-  // --- END MODIFICATION ---
 
   return (
     <Card>
@@ -524,14 +500,38 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
       <CardContent>
         <div className="grid gap-4">
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          {/* --- vvv THIS GRID IS NOW 5 COLUMNS vvv --- */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             
-            {/* --- THIS IS THE DROPDOWN --- */}
+			{/* --- 2. Active Project Name (NEWLY ADDED) --- */}
+            <div className="grid gap-2">
+                <Label htmlFor="projectName">Active Project Name</Label>
+                <div className="flex space-x-2">
+                    <Input
+                        id="projectName"
+                        value={currentProjectName}
+                        onChange={(e) => setCurrentProjectName(e.target.value)}
+                        placeholder={"Select a project"}
+                        disabled={isUpdatingName || !selectedProjectId}
+                    />
+                    <Button
+                        variant="default"
+                        size="icon"
+                        onClick={handleUpdateProjectName}
+                        disabled={isUpdatingName || !selectedProjectId}
+                    >
+                        {isUpdatingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    </Button>
+                </div>
+            </div>
+            {/* --- END OF NEW BLOCK --- */}
+			
+            {/* --- 1. Project Selector (Dropdown) --- */}
             <div className="grid gap-2">
                 <Label htmlFor="projectId">Project</Label>
                 <Select 
-                  value={jobState.formData.projectId || ''} // Read from global state
-                  onValueChange={onProjectChange} // <-- USE THE NEW HANDLER
+                  value={jobState.formData.projectId || ''} 
+                  onValueChange={onProjectChange} 
                   disabled={isProcessing || projects.length === 0}
                 >
                   <SelectTrigger id="projectId">
@@ -546,9 +546,10 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                   </SelectContent>
                 </Select>
             </div>
-            {/* --- END OF DROPDOWN --- */}
             
-            {/* 2. Task List ID */}
+            
+
+            {/* 3. Task List ID */}
             <div className="grid gap-2">
                 <Label htmlFor="tasklistId">Task List ID (Auto)</Label>
                 <Input
@@ -565,7 +566,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                 )}
             </div>
 
-            {/* 3. Delay */}
+            {/* 4. Delay */}
             <div className="grid gap-2">
               <Label htmlFor="delay">Delay (s)</Label>
               <Input
@@ -573,22 +574,23 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                 type="number"
                 min="0.5"
                 step="0.1"
-                value={jobState.formData.delay} // Read from global state
-                onChange={(e) => handleFormDataChange('delay', Math.max(0.5, parseFloat(e.target.value) || 0.5))} // Write to global state
+                value={jobState.formData.delay} 
+                onChange={(e) => handleFormDataChange('delay', Math.max(0.5, parseFloat(e.target.value) || 0.5))} 
                 disabled={isProcessing}
               />
             </div>
 
-            {/* 4. Queue */}
+            {/* 5. Queue */}
             <div className="grid gap-2">
               <Label>Tasks in Queue</Label>
               <Input
-                value={jobState.formData.primaryValues.split('\n').filter(name => name.trim().length > 0).length} // Read from global state
+                value={jobState.formData.primaryValues.split('\n').filter(name => name.trim().length > 0).length} 
                 readOnly
                 className="bg-muted"
               />
             </div>
           </div>
+          {/* --- ^^^ END OF 5 COLUMN GRID ^^^ --- */}
 
 
           <hr className="my-4" />
@@ -601,8 +603,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                 <div className="grid gap-2">
                     <Label htmlFor="primaryField">Primary Field (List)</Label>
                     <Select 
-                      value={jobState.formData.primaryField} // Read from global state
-                      onValueChange={(value) => handleFormDataChange('primaryField', value)} // Write to global state
+                      value={jobState.formData.primaryField} 
+                      onValueChange={(value) => handleFormDataChange('primaryField', value)} 
                       disabled={isProcessing || isLoadingLayout}
                     >
                         <SelectTrigger id="primaryField">
@@ -654,14 +656,13 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                         <div className="grid grid-cols-1 gap-4">
                             {allFields
                                 .filter(field => 
-                                    visibleFields[field.column_name] && // Is it visible?
-                                    field.column_name !== jobState.formData.primaryField  // Is it NOT the primary field?
+                                    visibleFields[field.column_name] && 
+                                    field.column_name !== jobState.formData.primaryField  
                                 ) 
                                 .map(field => {
                                     const fieldKey = field.column_name;
                                     const currentFieldValue = jobState.formData.bulkDefaultData[fieldKey] || '';
 
-                                    // Specific handler for this field
                                     const handleApplyImageToField = (html: string) => {
                                         handleDynamicFieldChange(fieldKey, currentFieldValue + '\n' + html);
                                     };
@@ -693,7 +694,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                                                 <Textarea
                                                     id={fieldKey}
                                                     placeholder={field.i18n_display_name}
-                                                    value={currentFieldValue} // Read from global state
+                                                    value={currentFieldValue} 
                                                     onChange={(e) => handleDynamicFieldChange(fieldKey, e.target.value)}
                                                     disabled={isProcessing}
                                                     className="min-h-[120px]"
@@ -702,7 +703,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                                         );
                                     }
 
-                                    // Default rendering for other fields
                                     return (
                                         <div key={fieldKey} className="grid gap-2">
                                             <Label htmlFor={fieldKey}>{field.i18n_display_name}</Label>

@@ -3,13 +3,13 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-// --- ADDED THIS IMPORT ---
-import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban } from 'lucide-react';
+// --- ADDED 'Video' ICON ---
+import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video } from 'lucide-react';
 // --- END ---
 import { cn } from '@/lib/utils';
 import { ProfileSelector } from './ProfileSelector';
-// NOTE: ProjectsJobs imported from '@/App' is used here, assuming you correctly merged the previous App.tsx changes
-import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs } from '@/App';
+// --- ADDED 'WebinarJobs' IMPORT ---
+import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App';
 import { Socket } from 'socket.io-client';
 
 type ApiStatus = {
@@ -18,10 +18,10 @@ type ApiStatus = {
     fullResponse?: any;
 };
 
-// --- ADDED ProjectsJobs to the type ---
-type AllJobs = Jobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs;
-// --- ADDED 'projects' to the type ---
-type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects';
+// --- ADDED 'WebinarJobs' to the type ---
+type AllJobs = Jobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs;
+// --- ADDED 'meeting' to the type ---
+type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting';
 
 
 interface DashboardLayoutProps {
@@ -109,7 +109,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div>
                 {/* --- Better Divider --- */}
                 <SidebarDivider />
-                
+               
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Inventory</h3>
                 <SidebarNavLink to="/bulk-invoices">
                   <Package className="h-4 w-4" />
@@ -149,15 +149,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div>
                 {/* --- Better Divider --- */}
                 <SidebarDivider />
-                
+               
                 {/* --- Heading first --- */}
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Qntrl</h3>
-                
+               
                 {/* --- Better Note Style --- */}
                 <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
                     no from name - subject and content
                 </p>
-                
+               
                 <SidebarNavLink to="/qntrl-forms">
                   <Network className="h-4 w-4" />
                   Forms
@@ -198,13 +198,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   Forms
                 </SidebarNavLink>
               </div>
-              
+             
               {/* --- UPDATED PROJECTS BLOCK --- */}
               <div>
                 <SidebarDivider />
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Projects</h3>
                 <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    Task creation and management
+                    from name - subject can content (html image only)
                 </p>
                 <SidebarNavLink to="/projects-tasks">
                   <FolderKanban className="h-4 w-4" />
@@ -212,7 +212,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </SidebarNavLink>
               </div>
               {/* --- END OF UPDATED BLOCK --- */}
-              
+
+              {/* --- ZOHO MEETING BLOCK (ADDED) --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Meeting</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    from name - subject can be add
+                </p>
+                <SidebarNavLink to="/bulk-webinar-registration">
+                  <Video className="h-4 w-4" />
+                  Webinar Registration
+                </SidebarNavLink>
+              </div>
+              {/* --- END OF ADDED BLOCK --- */}
+             
             </nav>
           </div>
           <div className="mt-auto p-4 border-t">
@@ -223,7 +237,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
         </div>
       </div>
-      
+     
       <div className="flex flex-col">
         <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30">
           <div className="w-full flex-1">
