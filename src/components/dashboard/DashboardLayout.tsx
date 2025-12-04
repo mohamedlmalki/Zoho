@@ -1,14 +1,11 @@
-// --- FILE: src/components/dashboard/DashboardLayout.tsx (MODIFIED) ---
+// --- FILE: src/components/dashboard/DashboardLayout.tsx ---
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-// --- ADDED 'Video' ICON ---
 import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video } from 'lucide-react';
-// --- END ---
 import { cn } from '@/lib/utils';
 import { ProfileSelector } from './ProfileSelector';
-// --- ADDED 'WebinarJobs' IMPORT ---
 import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App';
 import { Socket } from 'socket.io-client';
 
@@ -18,9 +15,7 @@ type ApiStatus = {
     fullResponse?: any;
 };
 
-// --- ADDED 'WebinarJobs' to the type ---
 type AllJobs = Jobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs;
-// --- ADDED 'meeting' to the type ---
 type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting';
 
 
@@ -58,7 +53,6 @@ const SidebarNavLink = ({ to, children }: { to: string, children: React.ReactNod
     </NavLink>
 );
 
-// --- New Component for a clean divider ---
 const SidebarDivider = () => (
   <div className="px-4 py-2">
     <div className="border-t border-muted/50" />
@@ -76,7 +70,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const progressPercent = stats.totalToProcess > 0 ? (stats.totalTickets / stats.totalToProcess) * 100 : 0;
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+    // --- MODIFIED: Increased grid column width for sidebar ---
+    <div className="grid min-h-screen w-full md:grid-cols-[280px_1fr] lg:grid-cols-[340px_1fr]">
+    {/* -------------------------------------------------------- */}
       <div className="hidden border-r bg-card md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
@@ -94,7 +90,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
           <div className="flex-1 overflow-auto py-2">
             <nav className="grid items-start px-2 text-sm font-medium lg:px-4 space-y-4">
-              {/* ... (Other sections) ... */}
+              
               <div>
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Desk</h3>
                 <SidebarNavLink to="/">
@@ -108,24 +104,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
               
 			  <div>
-                {/* --- Better Divider --- */}
                 <SidebarDivider />
-
-                {/* --- Heading first --- */}
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Creator</h3>
-
-                {/* --- Better Note Style --- */}
                 <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
                     no from name - subject and content
                 </p>
-
                 <SidebarNavLink to="/creator-forms">
                   <AppWindow className="h-4 w-4" />
                   Forms
                 </SidebarNavLink>
               </div>
              
-              {/* --- UPDATED PROJECTS BLOCK --- */}
               <div>
                 <SidebarDivider />
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Projects</h3>
@@ -139,47 +128,28 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
 			  
               <div>
-                {/* --- Better Divider --- */}
                 <SidebarDivider />
-               
-                {/* --- Heading first --- */}
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Qntrl</h3>
-               
-                {/* --- Better Note Style --- */}
                 <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
                     no from name - subject and content
                 </p>
-               
                 <SidebarNavLink to="/qntrl-forms">
                   <Network className="h-4 w-4" />
                   Forms
                 </SidebarNavLink>
               </div>
               <div>
-                {/* --- Better Divider --- */}
                 <SidebarDivider />
-
-                {/* --- Heading first --- */}
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho People</h3>
-
-                {/* --- Better Note Style --- */}
                 <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
                     no from name - subject only - fast
                 </p>
-
                 <SidebarNavLink to="/people-forms">
                   <FileText className="h-4 w-4" />
                   Forms
                 </SidebarNavLink>
               </div>
 
-              
-              {/* --- END OF UPDATED BLOCK --- */}
-
-				
-              
-                
-              {/* --- ZOHO MEETING BLOCK (ADDED) --- */}
               <div>
                 <SidebarDivider />
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Meeting</h3>
@@ -193,8 +163,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
               <SidebarDivider />
              
-			 {/* -------------- INVENTORY ------------ */}
-			 
                <div>
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Inventory</h3>
                 <SidebarNavLink to="/bulk-invoices">
@@ -210,15 +178,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   Email Statics
                 </SidebarNavLink>
               </div>
-			 {/* -------------------------------- */}
 			 
-			 
-			 {/* -------------- INVENTORY ------------ */}
 			 <div>
-                {/* --- Better Divider --- */}
-                
                 <SidebarDivider />
-
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Catalyst</h3>
                 <SidebarNavLink to="/bulk-signup">
                   <Cloud className="h-4 w-4" />

@@ -1,4 +1,4 @@
-// In src/components/dashboard/ZohoDashboard.tsx
+// --- FILE: src/components/dashboard/ZohoDashboard.tsx ---
 
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -208,6 +208,9 @@ export const ZohoDashboard: React.FC<ZohoDashboardProps> = ({ jobs, setJobs, cre
             processingStartTime: new Date(),
             totalTicketsToProcess: allEmails.length,
             currentDelay: currentJob.formData.delay,
+            // --- FIX: Reset Timer to 0 ---
+            processingTime: 0,
+            // -----------------------------
         }
     }));
     

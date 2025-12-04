@@ -216,7 +216,8 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
   });
 
   const peopleProfiles = useMemo(() => {
-    return profiles.filter(p => p.people);
+    // --- FIX: Ensure we only get profiles with a configured Org ID ---
+    return profiles.filter(p => p.people && p.people.orgId);
   }, [profiles]);
 
   const selectedProfile = peopleProfiles.find(p => p.profileName === activeProfileName) || null;

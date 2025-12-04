@@ -562,11 +562,16 @@ const MainApp = () => {
           setJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialJobState();
             const isLastTicket = profileJob.results.length + 1 >= profileJob.totalTicketsToProcess;
+            
+            // --- ADDED: Capture the current time ---
+            const resultWithTime = { ...result, timestamp: new Date() };
+            // ---------------------------------------
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime], // Use resultWithTime
                 countdown: isLastTicket ? 0 : profileJob.currentDelay,
               }
             };

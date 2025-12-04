@@ -1,12 +1,11 @@
-// --- FILE: src/components/dashboard/ProfileSelector.tsx (FIXED) ---
-import React, { useEffect, useMemo } from 'react'; // --- ADDED 'useMemo' ---
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+// --- FILE: src/components/dashboard/ProfileSelector.tsx ---
+import React, { useEffect, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { User, Building, AlertCircle, CheckCircle, Loader, RefreshCw, Activity, Edit, Trash2 } from 'lucide-react';
+import { User, Building, AlertCircle, CheckCircle, Loader, RefreshCw, Activity, Edit, Trash2, CheckCircle2, StopCircle, PauseCircle, XCircle } from 'lucide-react';
 import { Socket } from 'socket.io-client';
-// --- FIX: Import ALL job types, including new ones ---
 import { Profile, Jobs as TicketJobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App'; 
 import {
   AlertDialog,
@@ -26,7 +25,6 @@ type ApiStatus = {
     fullResponse?: any;
 };
 
-// --- FIX: Add 'WebinarJobs' and 'meeting' to the types ---
 type AllJobs = TicketJobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs;
 type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting';
 
@@ -41,9 +39,8 @@ interface ProfileSelectorProps {
   socket: Socket | null;
   onEditProfile: (profile: Profile) => void;
   onDeleteProfile: (profileName: string) => void;
-  service?: ServiceType; // <-- This prop is now correct
+  service?: ServiceType;
 }
-// --- END FIX ---
 
 export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
   profiles,
@@ -59,7 +56,6 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
   service = 'desk', 
 }) => {
 
-  // This useEffect is now correct and will work with 'projects'
   useEffect(() => {
     if (selectedProfile?.profileName && socket?.connected) {
       socket.emit('checkApiStatus', { 
@@ -69,29 +65,25 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
     }
   }, [selectedProfile?.profileName, socket?.connected, service, socket]);
 
-  // --- ADDED: FILTERING LOGIC ---
   const filteredProfiles = useMemo(() => {
-    if (!service) return profiles; // If no service specified, show all
+    if (!service) return profiles;
     return profiles.filter(p => {
       if (service === 'desk') return p.desk && p.desk.orgId;
       if (service === 'inventory') return p.inventory && p.inventory.orgId;
       if (service === 'catalyst') return p.catalyst && p.catalyst.projectId;
       if (service === 'qntrl') return p.qntrl && p.qntrl.orgId;
-      if (service === 'people') return p.people;
+      if (service === 'people') return p.people && p.people.orgId;
       if (service === 'creator') return p.creator && p.creator.appName && p.creator.ownerName;
       if (service === 'projects') return p.projects && p.projects.portalId;
-      if (service === 'meeting') return p.meeting; // This will show profiles with a 'meeting' object
-      return true; // Default
+      if (service === 'meeting') return p.meeting && p.meeting.zsoid;
+      return true;
     });
   }, [profiles, service]);
-  // --- END ADDED ---
 
   const getBadgeProps = () => {
-    // --- FIX: Add a safety check in case apiStatus is undefined during render ---
     if (!apiStatus) {
         return { text: 'Loading...', variant: 'secondary' as const, icon: <Loader className="h-4 w-4 mr-2 animate-spin" /> };
     }
-    // ---
     switch (apiStatus.status) {
       case 'success':
         return { text: 'Connected', variant: 'success' as const, icon: <CheckCircle className="h-4 w-4 mr-2" /> };
@@ -105,7 +97,7 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
   const badgeProps = getBadgeProps();
  
   const getTotalToProcess = (job: any) => {
-    return job.totalTicketsToProcess || job.totalToProcess || 0;
+    return job?.totalTicketsToProcess || job?.totalToProcess || 0;
   }
 
   return (
@@ -154,22 +146,35 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
             <Select 
               value={selectedProfile?.profileName || ''} 
               onValueChange={onProfileChange}
-              disabled={filteredProfiles.length === 0} // --- MODIFIED: disabled if list is empty ---
+              disabled={filteredProfiles.length === 0}
             >
               <SelectTrigger className="h-12 bg-muted/50 border-border hover:bg-muted transition-colors flex-1">
                 <SelectValue placeholder="Select a profile..." />
               </SelectTrigger>
               <SelectContent className="bg-card border-border shadow-large">
-                {/* --- ADDED: Message for no profiles --- */}
                 {filteredProfiles.length === 0 && (
                   <div className="p-2 text-sm text-muted-foreground text-center">
                     No profiles found for this service.
                   </div>
                 )}
-                {/* --- MODIFIED: Use 'filteredProfiles' --- */}
                 {filteredProfiles.map((profile) => {
-                  const job = (jobs as AllJobs)[profile.profileName]; // Cast to AllJobs
-                  const isJobActive = job && job.isProcessing;
+                  const job = (jobs as AllJobs)[profile.profileName];
+                  const total = getTotalToProcess(job);
+                  const current = job?.results?.length || 0;
+                  // --- ADDED: Calculate Failed Count ---
+                  const failedCount = job?.results?.filter((r: any) => !r.success).length || 0;
+                  // -------------------------------------
+
+                  let status: 'processing' | 'paused' | 'finished' | 'ended' | null = null;
+                  
+                  if (job) {
+                    if (job.isProcessing) {
+                       status = job.isPaused ? 'paused' : 'processing';
+                    } else if (job.isComplete) {
+                       status = (current >= total && total > 0) ? 'finished' : 'ended';
+                    }
+                  }
+
                   return (
                     <SelectItem 
                       key={profile.profileName} 
@@ -181,12 +186,41 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
                           <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           <span className="font-medium truncate">{profile.profileName}</span>
                         </div>
-                        {isJobActive && (
-                          <Badge variant="outline" className="font-mono text-xs flex-shrink-0">
-                            <Activity className="h-3 w-3 mr-1.5 animate-pulse text-primary"/>
-                            {job.results.length}/{getTotalToProcess(job)} {job.isPaused ? 'paused' : 'processing'}
-                          </Badge>
-                        )}
+                        
+                        <div className="flex items-center space-x-2">
+                            {/* --- ADDED: Failed Count Badge --- */}
+                            {failedCount > 0 && (
+                                <Badge 
+                                    variant="destructive" 
+                                    className="font-mono text-xs flex-shrink-0 gap-1 border-red-600 bg-red-100 text-red-700 hover:bg-red-100"
+                                >
+                                    <XCircle className="h-3 w-3" />
+                                    <span>{failedCount} Fail</span>
+                                </Badge>
+                            )}
+                            {/* --------------------------------- */}
+
+                            {status && (
+                            <Badge 
+                                variant="outline" 
+                                className={`font-mono text-xs flex-shrink-0 gap-1 ${
+                                    status === 'processing' ? 'border-primary text-primary' :
+                                    status === 'paused' ? 'border-yellow-500 text-yellow-500' :
+                                    status === 'finished' ? 'border-green-500 text-green-500' :
+                                    'border-red-500 text-red-500' 
+                                }`}
+                            >
+                                {status === 'processing' && <Activity className="h-3 w-3 animate-pulse"/>}
+                                {status === 'paused' && <PauseCircle className="h-3 w-3"/>}
+                                {status === 'finished' && <CheckCircle2 className="h-3 w-3"/>}
+                                {status === 'ended' && <StopCircle className="h-3 w-3"/>}
+                                
+                                <span>{current}/{total}</span>
+                                <span className="capitalize hidden sm:inline">{status}</span>
+                            </Badge>
+                            )}
+                        </div>
+
                       </div>
                     </SelectItem>
                   )
@@ -210,7 +244,7 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
                     size="icon" 
                     className="h-8 w-8" 
                     onClick={onManualVerify}
-                    disabled={!apiStatus || apiStatus.status === 'loading'} // Safety check
+                    disabled={!apiStatus || apiStatus.status === 'loading'}
                   >
                       <RefreshCw className="h-4 w-4"/>
                   </Button>
@@ -218,7 +252,7 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
               </div>
 
                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm pt-2">
-                  {apiStatus && apiStatus.status === 'success' && apiStatus.fullResponse?.agentInfo && ( // Safety check
+                  {apiStatus && apiStatus.status === 'success' && apiStatus.fullResponse?.agentInfo && (
                       <>
                           <span className="text-muted-foreground">Agent Name:</span>
                           <span className="font-medium text-foreground text-right truncate">{apiStatus.fullResponse.agentInfo.firstName} {apiStatus.fullResponse.agentInfo.lastName}</span>
@@ -237,6 +271,12 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
                     <>
                       <span className="text-muted-foreground">Inventory Org ID:</span>
                       <span className="font-mono text-foreground text-right truncate">{selectedProfile.inventory.orgId}</span>
+                    </>
+                  )}
+                   {selectedProfile.meeting?.zsoid && (
+                    <>
+                      <span className="text-muted-foreground">Meeting Org ID:</span>
+                      <span className="font-mono text-foreground text-right truncate">{selectedProfile.meeting.zsoid}</span>
                     </>
                   )}
               </div>

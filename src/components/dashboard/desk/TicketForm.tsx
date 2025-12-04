@@ -1,6 +1,6 @@
-// In src/components/dashboard/desk/TicketForm.tsx
+// --- FILE: src/components/dashboard/desk/TicketForm.tsx ---
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Send, Eye, Mail, Clock, MessageSquare, Users, Pause, Play, Square, Bot, Upload, Edit, RefreshCw, Trash2, MailWarning, CheckCircle2, XCircle, ImagePlus } from 'lucide-react';
+import { Send, Eye, Mail, Clock, MessageSquare, Users, Pause, Play, Square, Bot, Upload, Edit, RefreshCw, Trash2, MailWarning, CheckCircle2, XCircle, ImagePlus, Timer } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Socket } from 'socket.io-client';
@@ -191,9 +191,11 @@ export const TicketForm: React.FC<TicketFormProps> = ({
       }
   };
 
-  const emailCount = formData.emails
-    .split('\n')
-    .filter(email => email.trim() !== '').length;
+  const emailCount = useMemo(() => {
+    return formData.emails
+      .split('\n')
+      .filter(email => email.trim() !== '').length;
+  }, [formData.emails]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,6 +240,26 @@ export const TicketForm: React.FC<TicketFormProps> = ({
   const handleApplyImage = (html: string) => {
     onFormDataChange({ ...formData, description: formData.description + '\n' + html });
   };
+
+  // --- ADDED: Estimated Time Calculation ---
+  const estimatedTime = useMemo(() => {
+    if (emailCount === 0) return null;
+    const totalSeconds = emailCount * (formData.delay || 0);
+    
+    if (totalSeconds === 0) return "0s";
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+    return parts.join(' ');
+  }, [emailCount, formData.delay]);
+  // -----------------------------------------
 
   const successCount = jobState?.results.filter(r => r.success).length || 0;
   const errorCount = jobState?.results.filter(r => !r.success).length || 0;
@@ -358,6 +380,28 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                         </Button>
                     </div>
                 </div>
+
+                {/* --- ADDED: Estimated Duration Card --- */}
+                {emailCount > 0 && (
+                    <div className="pt-4 border-t border-dashed">
+                        <div className="rounded-md bg-primary/5 border border-primary/20 p-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2 text-primary">
+                                    <Timer className="h-4 w-4" />
+                                    <span className="text-sm font-medium">Estimated Job Duration</span>
+                                </div>
+                                <span className="text-sm font-bold font-mono text-primary">
+                                    {estimatedTime}
+                                </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 ml-6">
+                                ~{formData.delay}s delay per ticket for {emailCount} recipients.
+                            </p>
+                        </div>
+                    </div>
+                )}
+                {/* -------------------------------------- */}
+
               </div>
             </div>
             <div className="space-y-4">

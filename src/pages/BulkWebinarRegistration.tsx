@@ -1,4 +1,4 @@
-// --- FILE: src/pages/BulkWebinarRegistration.tsx (MODIFIED) ---
+// --- FILE: src/pages/BulkWebinarRegistration.tsx ---
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Socket } from 'socket.io-client';
@@ -32,9 +32,7 @@ interface WebinarFormProps {
   onEndJob: () => void;
   socket: Socket | null;
   selectedProfile: Profile | null;
-  // --- ADDED ---
-  orgName: string | null; // Prop to receive the org name
-  // --- END ADDED ---
+  orgName: string | null;
 }
 
 const WebinarForm: React.FC<WebinarFormProps> = ({
@@ -47,9 +45,7 @@ const WebinarForm: React.FC<WebinarFormProps> = ({
   onEndJob,
   socket,
   selectedProfile,
-  // --- ADDED ---
   orgName,
-  // --- END ADDED ---
 }) => {
   const [webinarList, setWebinarList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -198,7 +194,6 @@ jane.smith@email.com
                         disabled={isProcessing}
                     />
                 </div>
-                {/* --- ADDED: Org Name Display --- */}
                 <div className="space-y-2">
                     <Label htmlFor="orgName">Organization Name</Label>
                     <Input
@@ -209,7 +204,6 @@ jane.smith@email.com
                         className="w-full"
                     />
                 </div>
-                {/* --- END ADDED --- */}
             </div>
 
           </div>
@@ -283,11 +277,15 @@ const BulkWebinarRegistration: React.FC<BulkWebinarRegistrationProps> = ({
 
   useEffect(() => {
     if (profiles.length > 0) {
-      const meetingProfiles = profiles.filter(p => p.meeting);
+      // --- FIX: Filter by zsoid so we don't select an empty profile ---
+      const meetingProfiles = profiles.filter(p => p.meeting && p.meeting.zsoid);
+      
       const currentProfileIsValid = meetingProfiles.some(p => p.profileName === activeProfileName);
 
       if ((!activeProfileName || !currentProfileIsValid) && meetingProfiles.length > 0) {
         setActiveProfileName(meetingProfiles[0].profileName);
+      } else if (meetingProfiles.length === 0) {
+        setActiveProfileName(null);
       }
       
       setJobs(prevJobs => {
@@ -340,15 +338,12 @@ const BulkWebinarRegistration: React.FC<BulkWebinarRegistrationProps> = ({
   
   const currentJob = activeProfileName ? jobs[activeProfileName] : null;
 
-  // --- ADDED: Extract orgName ---
   const orgName = useMemo(() => {
-      // Using the structure you provided
-      if (apiStatus.status === 'success' && apiStatus.fullResponse?.userData?.userDetails?.orgName) {
-          return apiStatus.fullResponse.userData.userDetails.orgName;
+      if (apiStatus.status === 'success' && apiStatus.fullResponse?.userData?.organization?.org_name) {
+          return apiStatus.fullResponse.userData.organization.org_name;
       }
       return null;
   }, [apiStatus]);
-  // --- END ADDED ---
 
   const handleFormDataChange = (newFormData: WebinarJobState['formData']) => {
     if (activeProfileName && currentJob) {
@@ -456,7 +451,7 @@ const BulkWebinarRegistration: React.FC<BulkWebinarRegistrationProps> = ({
                 onEndJob={handleEndJob}
                 socket={socket}
                 selectedProfile={selectedProfile}
-                orgName={orgName} // <-- Pass the new prop
+                orgName={orgName}
               />
               <WebinarResultsDisplay
                 results={currentJob.results}
