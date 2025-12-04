@@ -23,7 +23,7 @@ interface QntrlDashboardProps {
   onAddProfile: () => void;
   onEditProfile: (profile: Profile) => void;
   onDeleteProfile: (profileName: string) => void;
-  service: string; // We expect 'qntrl'
+  service: string; 
 }
 
 const SERVER_URL = "http://localhost:3000";
@@ -56,7 +56,6 @@ export const QntrlDashboard: React.FC<QntrlDashboardProps> = ({
   const qntrlProfiles = profiles.filter(p => p.qntrl?.orgId);
 
   useEffect(() => {
-    // Automatically select the first Qntrl-enabled profile if none is active
     if (qntrlProfiles.length > 0 && !activeProfileName) {
       setActiveProfileName(qntrlProfiles[0]?.profileName || null);
     }
@@ -76,7 +75,6 @@ export const QntrlDashboard: React.FC<QntrlDashboardProps> = ({
   }, [socket]);
 
   useEffect(() => {
-    // When active profile changes, check its API status
     if (activeProfileName && socket?.connected) {
       setApiStatus({ status: 'loading', message: 'Checking API connection...' });
       socket.emit('checkApiStatus', { selectedProfileName: activeProfileName, service: 'qntrl' });
@@ -129,6 +127,7 @@ export const QntrlDashboard: React.FC<QntrlDashboardProps> = ({
         socket={socket}
         onEditProfile={onEditProfile}
         onDeleteProfile={onDeleteProfile}
+        service={service as any} // <--- THIS LINE WAS ADDED
       >
         <div className="space-y-8">
           {activeProfileName && (
@@ -140,14 +139,9 @@ export const QntrlDashboard: React.FC<QntrlDashboardProps> = ({
                       setJobState={setJobStateForProfile}
                       createInitialJobState={createInitialJobState}
                   />
-                  
-                  {/* --- THIS IS THE FIX --- */}
-                  {/* Pass the entire job object instead of individual props */}
                   <QntrlResultsDisplay
                       job={currentJob}
                   />
-                  {/* --- END OF FIX --- */}
-
               </>
           )}
         </div>
