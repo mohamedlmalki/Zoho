@@ -26,7 +26,8 @@ import PeopleForms from './pages/PeopleForms';
 import CreatorForms from './pages/CreatorForms';
 import ProjectsTasksPage from './pages/ProjectsTasksPage';
 import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
-
+import LiveStats from '@/pages/LiveStats'; // Import the new page
+import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
 
@@ -660,11 +661,15 @@ const MainApp = () => {
           setPeopleJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialPeopleJobState();
             const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            
+            // --- FIX: Add timestamp so the table can display the time ---
+            const resultWithTime = { ...result, timestamp: new Date() };
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime], 
                 countdown: isLast ? 0 : profileJob.currentDelay,
               }
             };
@@ -1013,7 +1018,37 @@ const MainApp = () => {
                             />
                         }
                     />
-
+					
+					<Route
+                        path="/live-stats"
+                        element={
+                            <DashboardLayout
+                                onAddProfile={handleOpenAddProfile}
+                                onEditProfile={handleOpenEditProfile}
+                                onDeleteProfile={handleDeleteProfile}
+                                profiles={[]} // Layout expects these, pass defaults or active profile lists if available
+                                selectedProfile={null}
+                                onProfileChange={() => {}}
+                                apiStatus={{ status: 'success', message: '' }}
+                                onShowStatus={() => {}}
+                                onManualVerify={() => {}}
+                                socket={socketRef.current}
+                                jobs={jobs}
+                            >
+                                <LiveStats 
+                                    jobs={jobs}
+                                    invoiceJobs={invoiceJobs}
+                                    catalystJobs={catalystJobs}
+                                    emailJobs={emailJobs}
+                                    qntrlJobs={qntrlJobs}
+                                    peopleJobs={peopleJobs}
+                                    creatorJobs={creatorJobs}
+                                    projectsJobs={projectsJobs}
+                                    webinarJobs={webinarJobs}
+                                />
+                            </DashboardLayout>
+                        }
+                    />
 
                     <Route path="*" element={<NotFound />} />
                 </Routes>

@@ -1,7 +1,8 @@
 // --- FILE: src/pages/PeopleForms.tsx ---
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Socket } from 'socket.io-client';
+import { useLocation } from 'react-router-dom'; // --- ADDED THIS ---
 import { Profile, PeopleJobs, PeopleJobState, PeopleFormData } from '@/App';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { useQuery } from '@tanstack/react-query';
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { 
     FileText, RefreshCw, Loader2, Check, X, Shield, Send, Users, Clock, 
-    Pause, Play, Square, CheckCircle2, XCircle 
+    Pause, Play, Square, CheckCircle2, XCircle, Hourglass 
 } from 'lucide-react';
 import {
   Select,
@@ -193,6 +194,7 @@ const DynamicFormField = ({ field, value, onChange, isBulk = false, disabled = f
 
 
 const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
+  const location = useLocation(); // --- ADDED ---
   const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
   const [apiStatus, setApiStatus] = useState<ApiStatus>({ status: 'loading', message: 'Checking...' });
   const { toast } = useToast(); 
@@ -208,6 +210,9 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
   
   const [showCustomOnly, setShowCustomOnly] = useState(true);
   
+  // Ref to ensure we only handle the redirect once per mount
+  const redirectProcessed = useRef(false);
+
   const { jobs, setJobs, createInitialJobState } = props;
 
   const { data: profiles = [] } = useQuery<Profile[]>({
@@ -216,7 +221,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
   });
 
   const peopleProfiles = useMemo(() => {
-    // --- FIX: Ensure we only get profiles with a configured Org ID ---
     return profiles.filter(p => p.people && p.people.orgId);
   }, [profiles]);
 
@@ -238,7 +242,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     bulkDelay 
   } = formData;
 
-  // Memoized lists of forms and fields
   const filteredForms = useMemo(() => {
     if (!showCustomOnly) return forms;
     return forms.filter(form => form.iscustom === true);
@@ -257,7 +260,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
   }, [formFields]);
 
   useEffect(() => {
-    // Only set the default primary field if one isn't already set and the job isn't running
     if (!bulkPrimaryField && !activeJob.isProcessing) {
       if (autoEmailField) {
         handleFormStateChange('bulkPrimaryField', autoEmailField);
@@ -265,14 +267,28 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
         handleFormStateChange('bulkPrimaryField', formFields[0].labelname);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoEmailField, formFields, activeJob.isProcessing]);
 
+  // --- UPDATED EFFECT FOR PROFILE SELECTION ---
   useEffect(() => {
-    if (peopleProfiles.length > 0 && !activeProfileName) {
+    if (peopleProfiles.length === 0) return;
+
+    // 1. Check if we were redirected from LiveStats with a specific target profile
+    if (!redirectProcessed.current && location.state?.targetProfile) {
+        const target = peopleProfiles.find(p => p.profileName === location.state.targetProfile);
+        if (target) {
+            setActiveProfileName(target.profileName);
+            redirectProcessed.current = true;
+            return;
+        }
+    }
+
+    // 2. Default fallback if no profile is active yet
+    if (!activeProfileName) {
       setActiveProfileName(peopleProfiles[0].profileName);
     }
-  }, [peopleProfiles, activeProfileName]);
+  }, [peopleProfiles, activeProfileName, location.state]);
+  // ------------------------------------------
   
   const fetchForms = useCallback(() => {
     if (props.socket && selectedProfile) {
@@ -283,7 +299,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     }
   }, [props.socket, selectedProfile]);
 
-  // Set up socket listeners
   useEffect(() => {
     if (!props.socket) return;
     
@@ -345,7 +360,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     if (selectedProfile && props.socket) {
         fetchForms();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProfile, props.socket]);
 
   useEffect(() => {
@@ -362,9 +376,7 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     }
   }, [selectedForm, props.socket, selectedProfile]);
   
-  // Auto-select first form
   useEffect(() => {
-    // Only auto-select if a job isn't running and no form is selected
     if (!activeJob.isProcessing && filteredForms.length > 0 && !selectedFormId) {
       handleFormStateChange('selectedFormId', filteredForms[0].componentId.toString());
     }
@@ -374,7 +386,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
              handleFormStateChange('selectedFormId', filteredForms.length > 0 ? filteredForms[0].componentId.toString() : "");
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredForms, selectedFormId, activeJob.isProcessing]);
 
   const handleManualVerify = (service: string = 'people') => {
@@ -394,7 +405,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     setComponents([]);
   };
   
-  // Handler for single form (remains local)
   const handleSingleFormChange = (labelname: string, value: string) => {
       setSingleFormData(prev => ({ ...prev, [labelname]: value }));
   };
@@ -478,18 +488,15 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
         ...prev,
         [selectedProfile.profileName]: {
             ...currentJob,
-            // formData is already up-to-date
             isProcessing: true,
             isPaused: false,
             isComplete: false,
             processingStartTime: new Date(),
             totalToProcess: primaryValues.length,
             currentDelay: bulkDelay,
-            results: [], // Clear old results
+            results: [], 
             filterText: '',
-            // --- THIS IS THE FIX ---
-            processingTime: 0, // Reset timer to 0
-            // --- END FIX ---
+            processingTime: 0, 
         }
       };
     });
@@ -552,15 +559,8 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     service: 'people' as const, 
   };
   
-  const PermissionBadge = ({ level }: { level: number }) => {
-    const permissions: { [key: number]: { text: string, className: string } } = {
-        1: { text: "View", className: "bg-blue-600 hover:bg-blue-700" },
-        2: { text: "Edit", className: "bg-yellow-500 hover:bg-yellow-600" },
-        3: { text: "Full", className: "bg-green-600 hover:bg-green-700" },
-    };
-    const perm = permissions[level] || { text: "None", className: "bg-gray-500 hover:bg-gray-600" };
-    return <Badge className={`text-white ${perm.className}`}>{perm.text}</Badge>
-  };
+  // Calculate remaining
+  const remainingCount = activeJob.totalToProcess - activeJob.results.length;
 
   return (
     <>
@@ -716,19 +716,49 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
                                                 disabled={activeJob.isProcessing}
                                             />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="delay">Delay Between Records (seconds)</Label>
-                                            <Input
-                                                id="delay"
-                                                type="number"
-                                                min="0"
-                                                step="1"
-                                                value={bulkDelay}
-                                                onChange={(e) => handleFormStateChange('bulkDelay', parseInt(e.target.value) || 0)}
-                                                className="w-24"
-                                                disabled={activeJob.isProcessing}
-                                            />
+                                        
+                                        {/* --- Delay Input + Side-by-Side Stats --- */}
+                                        <div className="flex flex-wrap items-end gap-6">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="delay">Delay (seconds)</Label>
+                                                <Input
+                                                    id="delay"
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={bulkDelay}
+                                                    onChange={(e) => handleFormStateChange('bulkDelay', parseInt(e.target.value) || 0)}
+                                                    className="w-24"
+                                                    disabled={activeJob.isProcessing}
+                                                />
+                                            </div>
+
+                                            {activeJob && (activeJob.isProcessing || activeJob.results.length > 0) && (
+                                                <div className="flex items-center gap-3 bg-muted/40 p-2 rounded-md border border-border h-10">
+                                                    <div className="flex items-center gap-2 px-2">
+                                                        <Clock className="h-3 w-3 text-muted-foreground" />
+                                                        <span className="font-mono text-sm font-medium">{formatTime(activeJob.processingTime)}</span>
+                                                    </div>
+                                                    <Separator orientation="vertical" className="h-4" />
+                                                    <div className="flex items-center gap-2 px-2">
+                                                        <Hourglass className="h-3 w-3 text-muted-foreground" />
+                                                        <span className="font-mono text-sm font-medium">{remainingCount < 0 ? 0 : remainingCount}</span>
+                                                    </div>
+                                                    <Separator orientation="vertical" className="h-4" />
+                                                    <div className="flex items-center gap-2 px-2 text-success">
+                                                        <CheckCircle2 className="h-3 w-3" />
+                                                        <span className="font-mono text-sm font-bold">{activeJob.results.filter(r => r.success).length}</span>
+                                                    </div>
+                                                    <Separator orientation="vertical" className="h-4" />
+                                                    <div className="flex items-center gap-2 px-2 text-destructive">
+                                                        <XCircle className="h-3 w-3" />
+                                                        <span className="font-mono text-sm font-bold">{activeJob.results.filter(r => !r.success).length}</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
+                                        {/* -------------------------------------- */}
+
                                     </div>
                                     
                                     <div className="space-y-4">
@@ -749,30 +779,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
                                 <p className="text-muted-foreground">No fields found for this form or fields could not be loaded.</p>
                             )}
 
-                            {activeJob && (activeJob.isProcessing || activeJob.results.length > 0) && (
-                                <div className="pt-4 border-t border-dashed">
-                                    <div className="grid grid-cols-3 gap-4 text-center">
-                                        <div>
-                                            <Label className="text-xs text-muted-foreground">Time Elapsed</Label>
-                                            <p className="text-lg font-bold font-mono">{formatTime(activeJob.processingTime)}</p>
-                                        </div>
-                                        <div>
-                                            <Label className="text-xs text-muted-foreground">Success</Label>
-                                            <p className="text-lg font-bold font-mono text-success flex items-center justify-center space-x-1">
-                                                <CheckCircle2 className="h-4 w-4" />
-                                                <span>{activeJob.results.filter(r => r.success).length}</span>
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <Label className="text-xs text-muted-foreground">Failed</Label>
-                                            <p className="text-lg font-bold font-mono text-destructive flex items-center justify-center space-x-1">
-                                                <XCircle className="h-4 w-4" />
-                                                <span>{activeJob.results.filter(r => !r.success).length}</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </CardContent>
                         {formFields.length > 0 && (
                              <CardFooter>

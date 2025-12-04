@@ -1,12 +1,11 @@
-// --- NEW FILE ---
-// src/components/dashboard/people/PeopleResultsDisplay.tsx
-
-import React, { useMemo } from 'react';
+// --- FILE: src/components/dashboard/people/PeopleResultsDisplay.tsx ---
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CheckCircle2, XCircle, Eye, Hash, Mail, Clock, BarChart3, Download, Search } from 'lucide-react';
 import { PeopleResult } from '@/App';
 
@@ -31,37 +30,59 @@ export const PeopleResultsDisplay: React.FC<ResultsDisplayProps> = ({
   onFilterTextChange,
   primaryFieldLabel
 }) => {
+  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failed'>('all');
+
   const filteredResults = useMemo(() => {
-    if (!filterText) return results;
-    return results.filter(r => 
-      r.email.toLowerCase().includes(filterText.toLowerCase()) || // 'email' is used as the key, but it holds the primary field value
-      (r.details || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (r.error || '').toLowerCase().includes(filterText.toLowerCase()) ||
-      (r.success ? 'success' : 'failed').includes(filterText.toLowerCase())
-    );
-  }, [results, filterText]);
+    return results.filter(r => {
+      // 1. Text Filter
+      const matchesText = !filterText || (
+        r.email.toLowerCase().includes(filterText.toLowerCase()) || // 'email' holds the primary field value
+        (r.details || '').toLowerCase().includes(filterText.toLowerCase()) ||
+        (r.error || '').toLowerCase().includes(filterText.toLowerCase()) ||
+        (r.success ? 'success' : 'failed').includes(filterText.toLowerCase())
+      );
+
+      // 2. Status Filter
+      const matchesStatus = 
+        statusFilter === 'all' ? true :
+        statusFilter === 'success' ? r.success :
+        !r.success; 
+
+      return matchesText && matchesStatus;
+    });
+  }, [results, filterText, statusFilter]);
 
   const successCount = results.filter(r => r.success).length;
   const errorCount = results.filter(r => !r.success).length;
   const progressPercent = totalToProcess > 0 ? (results.length / totalToProcess) * 100 : 0;
 
   const handleExport = () => {
-    const header = `${primaryFieldLabel},Status,Details\n`;
-    const csvContent = filteredResults.map(r => {
-      const status = r.success ? 'Success' : 'Failed';
-      const details = (r.details || r.error || '').replace(/"/g, '""'); // Escape double quotes
-      return `${r.email},${status},"${details}"`;
-    }).join('\n');
-
-    const blob = new Blob([header + csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Export as TXT similar to Desk
+    const content = filteredResults.map(r => r.email).join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "people-import-results.csv");
+    
+    const filename = statusFilter === 'all' ? 'people-records-all.txt' : 
+                     statusFilter === 'success' ? 'people-records-success.txt' : 'people-records-failed.txt';
+
+    link.setAttribute("download", filename);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Helper to format time as H:M (e.g., 14:05)
+  // We extend the PeopleResult type locally to include timestamp if it's missing in the main definition
+  const formatTime = (result: any) => {
+    const dateInput = result.timestamp;
+    if (!dateInput) return '-';
+    const date = new Date(dateInput);
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
   };
 
   if (results.length === 0 && !isProcessing) {
@@ -121,24 +142,40 @@ export const PeopleResultsDisplay: React.FC<ResultsDisplayProps> = ({
         )}
         
         {results.length > 0 && (
-          <div className="flex items-center justify-between mb-4">
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Filter results..."
-                value={filterText}
-                onChange={(e) => onFilterTextChange(e.target.value)}
-                className="pl-10"
-              />
+          <div className="space-y-4 mb-4">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <Tabs 
+                value={statusFilter} 
+                onValueChange={(v) => setStatusFilter(v as 'all' | 'success' | 'failed')}
+                className="w-full md:w-auto"
+              >
+                <TabsList>
+                  <TabsTrigger value="all">All ({results.length})</TabsTrigger>
+                  <TabsTrigger value="success">Success ({successCount})</TabsTrigger>
+                  <TabsTrigger value="failed">Failed ({errorCount})</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <div className="relative flex-1 md:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={`Search ${primaryFieldLabel}...`}
+                    value={filterText}
+                    onChange={(e) => onFilterTextChange(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button variant="outline" onClick={handleExport} disabled={filteredResults.length === 0}>
+                  <Download className="h-4 w-4 mr-2"/>
+                  Export TXT ({filteredResults.length})
+                </Button>
+              </div>
             </div>
-            <Button variant="outline" onClick={handleExport} disabled={filteredResults.length === 0}>
-              <Download className="h-4 w-4 mr-2"/>
-              Export ({filteredResults.length})
-            </Button>
           </div>
         )}
 
-        {filteredResults.length > 0 && (
+        {filteredResults.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-border">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -160,6 +197,9 @@ export const PeopleResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       Details
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
+                      Time
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
                       Action
                     </th>
                   </tr>
@@ -167,7 +207,7 @@ export const PeopleResultsDisplay: React.FC<ResultsDisplayProps> = ({
                 <tbody className="bg-card divide-y divide-border">
                   {filteredResults.slice().reverse().map((result, index) => (
                     <tr 
-                      key={index}
+                      key={`${result.email}-${index}`}
                       className={`transition-colors hover:bg-muted/30 ${
                         result.success ? 'bg-success/5' : 'bg-destructive/5'
                       }`}
@@ -196,6 +236,9 @@ export const PeopleResultsDisplay: React.FC<ResultsDisplayProps> = ({
                           {result.details || result.error}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-sm text-center text-muted-foreground font-mono">
+                        {formatTime(result)}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <Dialog>
                           <DialogTrigger asChild>
@@ -205,8 +248,14 @@ export const PeopleResultsDisplay: React.FC<ResultsDisplayProps> = ({
                           </DialogTrigger>
                           <DialogContent className="max-w-3xl bg-card border-border shadow-large">
                             <DialogHeader>
-                              <DialogTitle>
-                                Full Response - {result.email}
+                              <DialogTitle className="flex items-center space-x-2">
+                                <Eye className="h-4 w-4" />
+                                <span>
+                                  {result.success 
+                                    ? `Full Response - ${result.email}`
+                                    : `Error Response - ${result.email}`
+                                  }
+                                </span>
                               </DialogTitle>
                             </DialogHeader>
                             <div className="max-h-[60vh] overflow-y-auto p-1">
@@ -222,6 +271,24 @@ export const PeopleResultsDisplay: React.FC<ResultsDisplayProps> = ({
                 </tbody>
               </table>
             </div>
+          </div>
+        ) : (
+          results.length > 0 && (
+            <div className="p-8 text-center border border-dashed border-border rounded-lg bg-muted/20">
+              <p className="text-muted-foreground">No results match your current filters.</p>
+            </div>
+          )
+        )}
+
+        {isComplete && (
+          <div className="mt-6 p-4 bg-gradient-success rounded-lg border border-success/20">
+            <div className="flex items-center justify-center space-x-2 text-success-foreground">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-medium">Processing Complete!</span>
+            </div>
+            <p className="text-center text-sm text-success-foreground/80 mt-1">
+              Successfully processed {successCount} out of {totalToProcess} records
+            </p>
           </div>
         )}
       </CardContent>

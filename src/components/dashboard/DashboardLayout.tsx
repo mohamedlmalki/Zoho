@@ -1,9 +1,9 @@
 // --- FILE: src/components/dashboard/DashboardLayout.tsx ---
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'; // Added hooks
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video } from 'lucide-react';
+import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video, Activity } from 'lucide-react'; // Added Activity icon
 import { cn } from '@/lib/utils';
 import { ProfileSelector } from './ProfileSelector';
 import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App';
@@ -67,12 +67,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   service, 
   ...profileSelectorProps 
 }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const progressPercent = stats.totalToProcess > 0 ? (stats.totalTickets / stats.totalToProcess) * 100 : 0;
+  
+  // Check if we are currently on the stats page to highlight the button
+  const isStatsPage = location.pathname === '/live-stats';
 
   return (
-    // --- MODIFIED: Increased grid column width for sidebar ---
     <div className="grid min-h-screen w-full md:grid-cols-[280px_1fr] lg:grid-cols-[340px_1fr]">
-    {/* -------------------------------------------------------- */}
       <div className="hidden border-r bg-card md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
@@ -212,9 +215,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </div>
      
       <div className="flex flex-col">
-        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30">
-          <div className="w-full flex-1">
-          </div>
+        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30 justify-between">
+          <div className="flex-1"></div>
+          
+          {/* --- NEW BUTTON IN NAVBAR --- */}
+          <Button 
+            variant={isStatsPage ? "default" : "outline"} 
+            size="sm" 
+            className="hidden md:flex items-center gap-2"
+            onClick={() => navigate('/live-stats')}
+          >
+            <Activity className="h-4 w-4" />
+            Live Statistics
+          </Button>
+          {/* --------------------------- */}
+
           {stats.isProcessing && stats.totalToProcess > 0 && (
             <div className="absolute bottom-0 left-0 w-full">
               <Progress value={progressPercent} className="h-1 w-full rounded-none bg-muted/50" />
