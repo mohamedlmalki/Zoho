@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Socket } from 'socket.io-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,7 @@ import { QntrlJobs, QntrlFormData } from '@/App';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Loader2, Play, Pause, Square, Clock, CheckCircle, XCircle,
-  // --- MODIFICATION: Added new icons ---
-  ImagePlus, Eye 
+  ImagePlus, Eye, Hash // <-- Added Hash icon
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -21,8 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge'; // <-- Added Badge
 
-// --- MODIFICATION: Added new UI component imports ---
 import {
   Dialog,
   DialogContent,
@@ -36,7 +35,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-// --- END MODIFICATION ---
 
 
 interface QntrlFormProps {
@@ -65,7 +63,6 @@ const formatTime = (seconds: number) => {
   return `${mins}m ${secs}s`;
 };
 
-// --- MODIFICATION: Copied ImageToolDialog from EmailForm.tsx ---
 const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
     const [imageUrl, setImageUrl] = useState('');
     const [altText, setAltText] = useState('');
@@ -88,7 +85,6 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
         
         onApply(finalHtml);
         setIsOpen(false);
-        // Reset fields
         setImageUrl('');
         setAltText('');
         setLinkUrl('');
@@ -151,7 +147,6 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
         </Dialog>
     );
 };
-// --- END MODIFICATION ---
 
 
 export const QntrlForm: React.FC<QntrlFormProps> = ({ profileName, socket, job, setJobState, createInitialJobState }) => {
@@ -163,6 +158,12 @@ export const QntrlForm: React.FC<QntrlFormProps> = ({ profileName, socket, job, 
   const [isLoadingForms, setIsLoadingForms] = useState(false);
   const [formComponents, setFormComponents] = useState<QntrlFormComponent[]>([]);
   const [isLoadingComponents, setIsLoadingComponents] = useState(false);
+
+  // --- ADDED: Count primary values logic ---
+  const primaryValuesCount = useMemo(() => {
+    return formData.bulkPrimaryValues.split('\n').filter(line => line.trim() !== '').length;
+  }, [formData.bulkPrimaryValues]);
+  // --- END ADDED ---
 
   // Fetch Qntrl Forms (Layouts)
   useEffect(() => {
@@ -396,7 +397,15 @@ export const QntrlForm: React.FC<QntrlFormProps> = ({ profileName, socket, job, 
               {/* Column 1: Bulk Values Textarea & Stats */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="primary-values">Bulk Primary Values (one per line)</Label>
+                  {/* --- MODIFIED: Added Counter Badge --- */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="primary-values">Bulk Primary Values (one per line)</Label>
+                    <Badge variant="secondary" className="text-xs">
+                        <Hash className="h-3 w-3 mr-1" />
+                        {primaryValuesCount} records
+                    </Badge>
+                  </div>
+                  {/* -------------------------------------- */}
                   <Textarea
                     id="primary-values"
                     placeholder="Paste your list of values here. Each line will become a new card."

@@ -1,247 +1,290 @@
-// --- FILE: src/components/dashboard/projects/TaskProgressTable.tsx (FIXED) ---
+// --- FILE: src/components/dashboard/projects/TaskProgressTable.tsx ---
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
-import { CheckCircle2, XCircle, Loader2, Eye, Play, Pause, Square, Trash2 } from 'lucide-react';
-import { TaskProgressState, TaskLogResult } from './ProjectsDataTypes';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ExportButton } from '../ExportButton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress'; // <-- ADDED PROGRESS BAR IMPORT
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CheckCircle2, XCircle, Eye, Hash, ListTodo, Clock, BarChart3, Download, Search } from 'lucide-react';
+import { ProjectsResult } from '@/App';
 
 interface TaskProgressTableProps {
-  jobState: TaskProgressState;
-  onClear: () => void;
-  onPause: () => void;
-  onResume: () => void;
-  onEnd: () => void;
+  results: ProjectsResult[];
+  isProcessing: boolean;
+  isComplete: boolean;
+  totalToProcess: number;
+  countdown: number;
+  filterText: string;
+  onFilterTextChange: (text: string) => void;
 }
 
-// --- REMOVED JobSummary component from here ---
-
-// JobControls component (this is correct)
-const JobControls: React.FC<{
-  isProcessing: boolean; isPaused: boolean; isComplete: boolean;
-  onPause: () => void; onResume: () => void; onEnd: () => void; onClear: () => void;
-}> = ({ isProcessing, isPaused, isComplete, onPause, onResume, onEnd, onClear }) => (
-  <div className="flex items-center space-x-2">
-    {isProcessing && !isPaused && (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="outline" size="icon" onClick={onPause}><Pause className="h-4 w-4" /></Button>
-        </TooltipTrigger>
-        <TooltipContent><p>Pause Job</p></TooltipContent>
-      </Tooltip>
-    )}
-    {isProcessing && isPaused && (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="outline" size="icon" onClick={onResume}><Play className="h-4 w-4" /></Button>
-        </TooltipTrigger>
-        <TooltipContent><p>Resume Job</p></TooltipContent>
-      </Tooltip>
-    )}
-    {isProcessing && (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="destructive" size="icon" onClick={onEnd}><Square className="h-4 w-4" /></Button>
-        </TooltipTrigger>
-        <TooltipContent><p>End Job</p></TooltipContent>
-      </Tooltip>
-    )}
-    {isComplete && (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="outline" size="icon" onClick={onClear}><Trash2 className="h-4 w-4" /></Button>
-        </TooltipTrigger>
-        <TooltipContent><p>Clear Log</p></TooltipContent>
-      </Tooltip>
-    )}
-  </div>
-);
-
-
 export const TaskProgressTable: React.FC<TaskProgressTableProps> = ({ 
-  jobState, 
-  onClear,
-  onPause,
-  onResume,
-  onEnd
+  results = [], // <--- FIX 1: Added default empty array
+  isProcessing, 
+  isComplete,
+  totalToProcess,
+  countdown,
+  filterText,
+  onFilterTextChange,
 }) => {
-  const [modalData, setModalData] = useState<any | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failed'>('all');
 
-  const isProcessing = jobState.isProcessing || jobState.isPaused;
-  const isComplete = jobState.isComplete;
+  // --- FIX 2: Ensure results is an array before filtering ---
+  const safeResults = Array.isArray(results) ? results : [];
 
-  const currentStatus: TaskLogResult[] = useMemo(() => {
-    const results = [...jobState.results];
-    if (isProcessing && results.length < jobState.totalToProcess) {
-      const remainingCount = jobState.totalToProcess - results.length;
-      results.push({
-        projectName: `Processing Next (${remainingCount} remaining)...`,
-        success: false,
-        details: jobState.isPaused ? 'Paused' : `Countdown: ${jobState.countdown}s`,
-        fullResponse: null,
-      });
-    }
-    return results.reverse();
-  }, [jobState.results, jobState.totalToProcess, jobState.isProcessing, jobState.isPaused, jobState.countdown]);
+  const filteredResults = useMemo(() => {
+    return safeResults.filter(r => {
+      // 1. Text Filter
+      const matchesText = !filterText || (
+        (r.projectName || '').toLowerCase().includes(filterText.toLowerCase()) ||
+        (r.details || '').toLowerCase().includes(filterText.toLowerCase()) ||
+        (r.error || '').toLowerCase().includes(filterText.toLowerCase()) ||
+        (r.success ? 'success' : 'failed').includes(filterText.toLowerCase())
+      );
 
+      // 2. Status Filter
+      const matchesStatus = 
+        statusFilter === 'all' ? true :
+        statusFilter === 'success' ? r.success :
+        !r.success; 
 
-  const columns: ColumnDef<TaskLogResult>[] = useMemo(() => [
-    {
-      id: 'number',
-      header: '#',
-      cell: ({ row, table }) => {
-        const totalRows = table.getCoreRowModel().rows.length;
-        return totalRows - row.index;
-      },
-      size: 40,
-    },
-    {
-      accessorKey: 'success',
-      header: 'Status',
-      cell: ({ row }) => {
-        if (row.original.details?.startsWith('Countdown')) {
-             return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
-        }
-        if (row.original.details === 'Paused') {
-            return <Badge variant="secondary">Paused</Badge>;
-        }
-        return row.original.success ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
-        ) : (
-          <XCircle className="h-4 w-4 text-red-500" />
-        );
-      },
-      size: 50,
-    },
-    {
-      accessorKey: 'projectName',
-      header: 'email', // <-- CHANGED FROM 'Task Name'
-      cell: ({ row }) => (
-        <div className="font-medium text-sm">
-            {row.original.projectName}
-        </div>
-      ),
-      size: 300,
-    },
-    {
-      accessorKey: 'details',
-      header: 'Details',
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
-          {row.original.details || row.original.error || 'Processing...'}
-        </span>
-      ),
-    },
-    {
-      id: 'actions',
-      cell: ({ row }) => {
-        const { fullResponse, error } = row.original;
-        const responseToShow = fullResponse || (error ? { errorDetails: error } : null);
-        
-        if (!responseToShow) {
-          return null;
-        }
+      return matchesText && matchesStatus;
+    });
+  }, [safeResults, filterText, statusFilter]);
 
-        return (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => setModalData(responseToShow)}>
-                <Eye className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent><p>View Full Response</p></TooltipContent>
-          </Tooltip>
-        );
-      },
-      size: 50,
-    }
-  ], []);
+  const successCount = safeResults.filter(r => r.success).length;
+  const errorCount = safeResults.filter(r => !r.success).length;
+  const progressPercent = totalToProcess > 0 ? (safeResults.length / totalToProcess) * 100 : 0;
 
-  // --- THIS IS THE FIX ---
-  // Calculate progress for the bar
-  const progressPercent = jobState.totalToProcess > 0 
-    ? (jobState.results.length / jobState.totalToProcess) * 100 
-    : 0;
+  // --- Export TXT Logic (Task Names only) ---
+  const handleExport = () => {
+    const content = filteredResults.map(r => r.projectName).join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    
+    const filename = statusFilter === 'all' ? 'projects-tasks-all.txt' : 
+                     statusFilter === 'success' ? 'projects-tasks-success.txt' : 'projects-tasks-failed.txt';
+
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Helper to format time as H:M
+  const formatTime = (dateInput?: Date | string) => {
+    if (!dateInput) return '-';
+    const date = new Date(dateInput);
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  if (safeResults.length === 0 && !isProcessing) {
+    return null;
+  }
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Bulk Job Progress</CardTitle>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2 sm:mt-0">
-              <JobControls
-                isProcessing={isProcessing}
-                isPaused={jobState.isPaused}
-                isComplete={isComplete}
-                onPause={onPause}
-                onResume={onResume}
-                onEnd={onEnd}
-                onClear={onClear}
-              />
-              <ExportButton
-                results={jobState.results}
-                filename="task_bulk_results.csv"
+    <Card className="shadow-medium hover:shadow-large transition-all duration-300 mt-6">
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <CardTitle className="text-lg">Processing Results</CardTitle>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Badge variant="success" className="bg-success/10 text-success">
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              {successCount} Success
+            </Badge>
+            {errorCount > 0 && (
+              <Badge variant="destructive" className="bg-destructive/10">
+                <XCircle className="h-3 w-3 mr-1" />
+                {errorCount} Errors
+              </Badge>
+            )}
+          </div>
+        </div>
+        <CardDescription>
+          {isProcessing ? 'Creating tasks in real-time...' : 
+           isComplete ? `All ${totalToProcess} tasks have been processed.` : 
+           'View results below.'}
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent>
+        {(isProcessing || (isComplete && safeResults.length > 0)) && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-foreground">Progress</span>
+              <div className="flex items-center space-x-2">
+                {isProcessing && countdown > 0 && (
+                  <Badge variant="outline" className="font-mono">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Next task in {countdown}s
+                  </Badge>
+                )}
+                <span className="text-sm text-muted-foreground">{safeResults.length} / {totalToProcess} processed</span>
+              </div>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div 
+                className="bg-gradient-primary h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
-          
-          {/* --- THIS IS THE FIX: Added Progress Bar here --- */}
-          {(isProcessing || isComplete) && (
-            <div className="mt-4 space-y-2">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Progress</span>
-                    <span>{jobState.results.length} / {jobState.totalToProcess} tasks</span>
-                </div>
-                <Progress value={progressPercent} className="h-2" />
-            </div>
-          )}
-          {/* --- END OF FIX --- */}
+        )}
+        
+        {safeResults.length > 0 && (
+          <div className="space-y-4 mb-4">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <Tabs 
+                value={statusFilter} 
+                onValueChange={(v) => setStatusFilter(v as 'all' | 'success' | 'failed')}
+                className="w-full md:w-auto"
+              >
+                <TabsList>
+                  <TabsTrigger value="all">All ({safeResults.length})</TabsTrigger>
+                  <TabsTrigger value="success">Success ({successCount})</TabsTrigger>
+                  <TabsTrigger value="failed">Failed ({errorCount})</TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-        </CardHeader>
-        <CardContent>
-          {/* --- The JobSummary component is REMOVED from here --- */}
-          
-          {isProcessing || isComplete ? (
-            <DataTable 
-                columns={columns} 
-                data={currentStatus} 
-                filterColumnId="projectName" 
-                filterPlaceholder="Filter emails..." // <-- CHANGED FROM 'Filter task names...'
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground p-4">
-              Start a bulk job to see real-time progress here.
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <div className="relative flex-1 md:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tasks..."
+                    value={filterText}
+                    onChange={(e) => onFilterTextChange(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button variant="outline" onClick={handleExport} disabled={filteredResults.length === 0}>
+                  <Download className="h-4 w-4 mr-2"/>
+                  Export TXT ({filteredResults.length})
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {filteredResults.length > 0 ? (
+          <div className="overflow-hidden rounded-lg border border-border">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-12">
+                      <Hash className="h-4 w-4" />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <div className="flex items-center space-x-1">
+                        <ListTodo className="h-4 w-4" />
+                        <span>Task Name</span>
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-24">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Details
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
+                      Time
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-card divide-y divide-border">
+                  {filteredResults.slice().reverse().map((result, index) => (
+                    <tr 
+                      key={index}
+                      className={`transition-colors hover:bg-muted/30 ${
+                        result.success ? 'bg-success/5' : 'bg-destructive/5'
+                      }`}
+                    >
+                      <td className="px-4 py-3 text-sm text-center text-muted-foreground font-mono">
+                        {filteredResults.length - index}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-foreground">
+                        {result.projectName}
+                      </td>
+                      <td className="px-4 py-3">
+                        {result.success ? (
+                          <Badge variant="success" className="bg-success/10 text-success">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Success
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="bg-destructive/10">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Failed
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-foreground">
+                        <span className={!result.success ? "text-destructive font-medium" : "font-medium"}>
+                          {result.details || result.error}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-center text-muted-foreground font-mono">
+                        {formatTime(result.timestamp)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-3xl bg-card border-border shadow-large">
+                            <DialogHeader>
+                              <DialogTitle>
+                                Full Response - {result.projectName}
+                              </DialogTitle>
+                            </DialogHeader>
+                            <div className="max-h-[60vh] overflow-y-auto p-1">
+                               <pre className="bg-muted/50 p-4 rounded-lg text-xs font-mono text-foreground border border-border">
+                                {JSON.stringify(result.fullResponse, null, 2)}
+                               </pre>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+           safeResults.length > 0 && (
+            <div className="p-8 text-center border border-dashed border-border rounded-lg bg-muted/20">
+              <p className="text-muted-foreground">No results match your current filters.</p>
+            </div>
+          )
+        )}
+
+        {isComplete && (
+          <div className="mt-6 p-4 bg-gradient-success rounded-lg border border-success/20">
+            <div className="flex items-center justify-center space-x-2 text-success-foreground">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-medium">Processing Complete!</span>
+            </div>
+            <p className="text-center text-sm text-success-foreground/80 mt-1">
+              Successfully processed {successCount} out of {totalToProcess} tasks
             </p>
-          )}
-        </CardContent>
-      </Card>
-      
-      <Dialog open={!!modalData} onOpenChange={(isOpen) => !isOpen && setModalData(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Full API Response</DialogTitle>
-          </DialogHeader>
-          <pre className="bg-muted p-4 rounded-lg text-xs font-mono text-foreground border max-h-[60vh] overflow-y-auto">
-            {JSON.stringify(modalData, null, 2)}
-          </pre>
-          <DialogFooter>
-            <Button onClick={() => setModalData(null)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };

@@ -1,5 +1,4 @@
 // --- FILE: src/pages/CreatorForms.tsx ---
-// --- Full corrected code ---
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Socket } from 'socket.io-client';
@@ -16,9 +15,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { 
-    FileText, RefreshCw, Loader2, Check, X, Shield, Send, Users, Clock, 
-    Pause, Play, Square, CheckCircle2, XCircle, AppWindow,
-    ImagePlus, Eye
+    FileText, RefreshCw, Loader2, Send, Clock, 
+    Pause, Play, Square, CheckCircle2, XCircle,
+    ImagePlus, Eye, Users, Hash
 } from 'lucide-react';
 import {
   Select,
@@ -30,11 +29,11 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from '@/components/ui/badge';
@@ -384,7 +383,7 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
   });
 
   const creatorProfiles = useMemo(() => {
-    return profiles.filter(p => p.creator);
+    return profiles.filter(p => p.creator && p.creator.appName && p.creator.ownerName);
   }, [profiles]);
 
   const selectedProfile = creatorProfiles.find(p => p.profileName === activeProfileName) || null;
@@ -416,6 +415,14 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
   const autoEmailField = useMemo(() => {
       return formFields.find(f => f.type === 3 || f.link_name.includes('Email'))?.link_name || null;
   }, [formFields]);
+
+  // --- ADDED: Primary Values Counter ---
+  const primaryValuesCount = useMemo(() => {
+    return bulkPrimaryValues
+      .split('\n')
+      .filter(line => line.trim() !== '').length;
+  }, [bulkPrimaryValues]);
+  // -------------------------------------
 
   useEffect(() => {
     if (!bulkPrimaryField && !activeJob.isProcessing) {
@@ -482,9 +489,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
         }
     };
     
-    // =================================================================
-    // --- FIX 1: Listen for `result.fields`, not `result.components` ---
-    // =================================================================
     const handleFormComponentsResult = (result: { success: boolean, fields?: CreatorField[], error?: string }) => {
         setIsLoadingFields(false);
         if (result.success && result.fields) {
@@ -495,9 +499,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
             toast({ title: "Error Fetching Form Fields", description: result.error, variant: "destructive" });
         }
     };
-    // =================================================================
-    // --- END FIX ---
-    // =================================================================
     
     const handleInsertResult = (result: { success: boolean, data?: any, error?: string }) => {
         setIsSubmitting(false);
@@ -582,17 +583,11 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
       }
       
       setIsSubmitting(true);
-      // =================================================================
-      // --- FIX 2: Send `formData`, not `inputData` ---
-      // =================================================================
       props.socket.emit('insertCreatorRecord', {
           selectedProfileName: selectedProfile?.profileName,
           formLinkName: selectedForm.link_name,
           formData: singleFormData 
       });
-      // =================================================================
-      // --- END FIX ---
-      // =================================================================
   };
 
   const handleFormStateChange = (field: keyof CreatorFormData, value: any) => {
@@ -665,9 +660,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
       };
     });
     
-    // =================================================================
-    // --- FIX 3: Send keys that match the backend handler ---
-    // =================================================================
     props.socket.emit('startBulkInsertCreatorRecords', {
         selectedProfileName: selectedProfile.profileName,
         selectedFormLinkName: selectedForm.link_name,
@@ -677,9 +669,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
         bulkDelay: bulkDelay,
         activeProfile: selectedProfile
     });
-    // =================================================================
-    // --- END FIX ---
-    // =================================================================
   };
 
   const handlePauseResume = () => {
@@ -858,9 +847,17 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="primary-values">
-                                                {formFields.find(f => f.link_name === bulkPrimaryField)?.display_name || 'Values'} (one per line)
-                                            </Label>
+                                            {/* --- MODIFIED: Added Counter Badge --- */}
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="primary-values">
+                                                    {formFields.find(f => f.link_name === bulkPrimaryField)?.display_name || 'Values'} (one per line)
+                                                </Label>
+                                                <Badge variant="secondary" className="text-xs">
+                                                    <Hash className="h-3 w-3 mr-1" />
+                                                    {primaryValuesCount} records
+                                                </Badge>
+                                            </div>
+                                            {/* -------------------------------------- */}
                                             <Textarea
                                                 id="primary-values"
                                                 placeholder="Value 1&#x0A;Value 2&#x0A;Value 3"
@@ -905,7 +902,8 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
 
                             {activeJob && (activeJob.isProcessing || activeJob.results.length > 0) && (
                                 <div className="pt-4 border-t border-dashed">
-                                    <div className="grid grid-cols-3 gap-4 text-center">
+                                    {/* --- MODIFIED: Added Remaining Counter --- */}
+                                    <div className="grid grid-cols-4 gap-4 text-center">
                                         <div>
                                             <Label className="text-xs text-muted-foreground">Time Elapsed</Label>
                                             <p className="text-lg font-bold font-mono">{formatTime(activeJob.processingTime)}</p>
@@ -924,7 +922,15 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
                                                 <span>{activeJob.results.filter(r => !r.success).length}</span>
                                             </p>
                                         </div>
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">Remaining</Label>
+                                            <p className="text-lg font-bold font-mono text-muted-foreground flex items-center justify-center space-x-1">
+                                                <Clock className="h-4 w-4" />
+                                                <span>{(activeJob.totalToProcess || 0) - (activeJob.results.length || 0)}</span>
+                                            </p>
+                                        </div>
                                     </div>
+                                    {/* ----------------------------------------- */}
                                 </div>
                             )}
                         </CardContent>

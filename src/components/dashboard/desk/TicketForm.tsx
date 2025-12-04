@@ -335,7 +335,8 @@ export const TicketForm: React.FC<TicketFormProps> = ({
 
                 {jobState && (jobState.isProcessing || jobState.results.length > 0) && (
                     <div className="pt-4 border-t border-dashed">
-                        <div className="grid grid-cols-3 gap-4 text-center">
+                        {/* --- MODIFIED: Added Remaining Counter --- */}
+                        <div className="grid grid-cols-4 gap-4 text-center">
                             <div>
                                 <Label className="text-xs text-muted-foreground">Time Elapsed</Label>
                                 <p className="text-lg font-bold font-mono">{formatTime(jobState.processingTime)}</p>
@@ -354,7 +355,15 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                                     <span>{errorCount}</span>
                                 </p>
                             </div>
+                            <div>
+                                <Label className="text-xs text-muted-foreground">Remaining</Label>
+                                <p className="text-lg font-bold font-mono text-muted-foreground flex items-center justify-center space-x-1">
+                                    <Clock className="h-4 w-4" />
+                                    <span>{(jobState.totalTicketsToProcess || 0) - (jobState.results.length || 0)}</span>
+                                </p>
+                            </div>
                         </div>
+                        {/* ----------------------------------------- */}
                     </div>
                 )}
 

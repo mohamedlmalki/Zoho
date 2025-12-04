@@ -1,4 +1,4 @@
-// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (FIXED) ---
+// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (FIXED & SAFE) ---
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ProjectsJobState, ZohoProject, ProjectsFormData } from './ProjectsDataTypes';
+import { ProjectsJobState, ZohoProject, ProjectsFormData, ProjectsJobs } from './ProjectsDataTypes';
 // --- Added Save icon ---
-import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye, Save } from 'lucide-react';
+import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye, Save, Upload, List, CheckCircle2, XCircle, Hash } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import {
     DropdownMenu,
@@ -27,6 +27,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 
 // --- Types for the Task Layout (from your Postman response) ---
 interface TaskLayoutField {
@@ -136,14 +137,19 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
     );
 };
 
+// Helper for mm m ss s format
+const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+};
 
-// --- vvv NEW PROPS ADDED HERE vvv ---
 interface TaskBulkFormProps {
   selectedProfileName: string | null;
   projects: ZohoProject[];
   socket: Socket | null;
   jobState: ProjectsJobState;
-  setJobs: React.Dispatch<React.SetStateAction<any>>;
+  setJobs: React.Dispatch<React.SetStateAction<ProjectsJobs>>;
   autoTaskListId: string | null;
   selectedProjectId: string | null;
   currentProjectName: string;
@@ -151,45 +157,6 @@ interface TaskBulkFormProps {
   isUpdatingName: boolean;
   handleUpdateProjectName: () => void;
 }
-// --- ^^^ NEW PROPS ADDED HERE ^^^ ---
-
-
-const JobSummary: React.FC<{ jobState: ProjectsJobState }> = ({ jobState }) => {
-    const { 
-        results,
-        processingTime, 
-        isProcessing, 
-        isComplete 
-    } = jobState;
-    
-    if (!isProcessing && !isComplete) {
-        return null;
-    }
-
-    const successCount = results.filter(r => r.success).length;
-    const errorCount = results.length - successCount;
-    const elapsedTime = `${processingTime} s`; 
-
-    return (
-        <div className="grid grid-cols-3 gap-4 text-center my-4">
-            <div className="rounded-md border p-2">
-                <p className="text-xl font-bold text-green-600">{successCount}</p>
-                <p className="text-xs text-muted-foreground">Success</p>
-            </div>
-            <div className="rounded-md border p-2">
-                <p className="text-xl font-bold text-red-600">{errorCount}</p>
-                <p className="text-xs text-muted-foreground">Errors</p>
-            </div>
-            <div className="rounded-md border p-2">
-                <p className="text-xl font-bold text-primary">
-                    {elapsedTime}
-                </p>
-                <p className="text-xs text-muted-foreground">Time Elapsed</p>
-            </div>
-        </div>
-    );
-};
-
 
 export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({ 
     selectedProfileName, 
@@ -198,27 +165,31 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     jobState, 
     setJobs, 
     autoTaskListId,
-    // --- vvv RECEIVE NEW PROPS vvv ---
     selectedProjectId,
     currentProjectName,
     setCurrentProjectName,
     isUpdatingName,
     handleUpdateProjectName
-    // --- ^^^ RECEIVE NEW PROPS ^^^ ---
 }) => {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isProcessing = jobState.isProcessing;
   const isPaused = jobState.isPaused; 
+  const results = jobState.results || [];
 
   const [taskLayout, setTaskLayout] = useState<TaskLayout | null>(null);
   const [allFields, setAllFields] = useState<TaskLayoutField[]>([]);
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
   const [isLoadingLayout, setIsLoadingLayout] = useState(false);
 
+  // --- UPDATED: Safe State Update ---
   const handleFormDataChange = useCallback((field: keyof ProjectsFormData, value: any) => {
     if (!selectedProfileName) return;
     setJobs((prev) => {
-      const prevJobState = prev[selectedProfileName] || jobState;
+      // Safety Check: If profile state doesn't exist, don't crash
+      if (!prev[selectedProfileName]) return prev;
+      
+      const prevJobState = prev[selectedProfileName];
       return {
         ...prev,
         [selectedProfileName]: {
@@ -230,12 +201,15 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         },
       };
     });
-  }, [selectedProfileName, setJobs, jobState]); 
+  }, [selectedProfileName, setJobs]); 
 
+  // --- UPDATED: Safe Dynamic Field Update ---
   const handleDynamicFieldChange = useCallback((columnName: string, value: string) => {
     if (!selectedProfileName) return;
     setJobs((prev) => {
-      const prevJobState = prev[selectedProfileName] || jobState;
+      if (!prev[selectedProfileName]) return prev;
+
+      const prevJobState = prev[selectedProfileName];
       return {
         ...prev,
         [selectedProfileName]: {
@@ -250,7 +224,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         },
       };
     });
-  }, [selectedProfileName, setJobs, jobState]); 
+  }, [selectedProfileName, setJobs]); 
 
   const onProjectChange = useCallback((newProjectId: string) => {
     handleFormDataChange('projectId', newProjectId);
@@ -435,15 +409,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
     
     const fieldKey = field.column_name;
 
-    if (field.column_type === "picklist") {
-         return <Input 
-            placeholder={field.i18n_display_name} 
-            value={jobState.formData.bulkDefaultData[fieldKey] || ''} 
-            onChange={(e) => handleDynamicFieldChange(fieldKey, e.target.value)}
-            disabled={isProcessing}
-         />
-    }
-    
     return <Input 
         type={inputType} 
         placeholder={field.i18n_display_name} 
@@ -452,6 +417,21 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         disabled={isProcessing}
     />
   };
+
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => handleFormDataChange('primaryValues', e.target?.result as string);
+      reader.readAsText(file);
+    }
+  };
+
+  // --- STATS LOGIC ---
+  const primaryValuesCount = (jobState.formData.primaryValues || '').split('\n').filter(l => l.trim()).length;
+  const successCount = results.filter(r => r.success).length;
+  const errorCount = results.filter(r => !r.success).length;
+  const remainingCount = Math.max(0, (jobState.totalToProcess || primaryValuesCount) - results.length);
 
   return (
     <Card>
@@ -500,10 +480,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
       <CardContent>
         <div className="grid gap-4">
           
-          {/* --- vvv THIS GRID IS NOW 5 COLUMNS vvv --- */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             
-			{/* --- 2. Active Project Name (NEWLY ADDED) --- */}
             <div className="grid gap-2">
                 <Label htmlFor="projectName">Active Project Name</Label>
                 <div className="flex space-x-2">
@@ -524,9 +502,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                     </Button>
                 </div>
             </div>
-            {/* --- END OF NEW BLOCK --- */}
 			
-            {/* --- 1. Project Selector (Dropdown) --- */}
             <div className="grid gap-2">
                 <Label htmlFor="projectId">Project</Label>
                 <Select 
@@ -547,9 +523,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                 </Select>
             </div>
             
-            
-
-            {/* 3. Task List ID */}
             <div className="grid gap-2">
                 <Label htmlFor="tasklistId">Task List ID (Auto)</Label>
                 <Input
@@ -566,7 +539,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                 )}
             </div>
 
-            {/* 4. Delay */}
             <div className="grid gap-2">
               <Label htmlFor="delay">Delay (s)</Label>
               <Input
@@ -580,26 +552,20 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
               />
             </div>
 
-            {/* 5. Queue */}
             <div className="grid gap-2">
               <Label>Tasks in Queue</Label>
               <Input
-                value={jobState.formData.primaryValues.split('\n').filter(name => name.trim().length > 0).length} 
+                value={primaryValuesCount} 
                 readOnly
                 className="bg-muted"
               />
             </div>
           </div>
-          {/* --- ^^^ END OF 5 COLUMN GRID ^^^ --- */}
-
 
           <hr className="my-4" />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* --- LEFT COLUMN --- */}
             <div className="space-y-6">
-                {/* 1. Primary Field (Dropdown) */}
                 <div className="grid gap-2">
                     <Label htmlFor="primaryField">Primary Field (List)</Label>
                     <Select 
@@ -623,9 +589,34 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                     </p>
                 </div>
                 
-                {/* 2. Primary Values (Textarea) */}
                 <div className="grid gap-2">
-                    <Label htmlFor="primaryValues">Primary Field Values (one per line)</Label>
+                    {/* --- BADGE ADDED HERE --- */}
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="primaryValues">Primary Field Values (one per line)</Label>
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept=".txt,.csv"
+                                onChange={handleFileImport}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isProcessing}
+                                className="h-6 text-xs"
+                            >
+                                <Upload className="h-3 w-3 mr-1" /> Import
+                            </Button>
+                            <Badge variant="secondary" className="text-xs h-6">
+                                <List className="h-3 w-3 mr-1" />
+                                {primaryValuesCount}
+                            </Badge>
+                        </div>
+                    </div>
                     <Textarea
                     id="primaryValues"
                     placeholder="Paste your list here, e.g., a list of emails or task names."
@@ -637,9 +628,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                 </div>
             </div>
             
-            {/* --- RIGHT COLUMN --- */}
             <div className="space-y-6">
-                {/* 4. DYNAMIC FIELDS AREA --- */}
                 {isLoadingLayout && (
                     <div className="space-y-4 rounded-md border p-4">
                         <Label className="text-base font-medium">Custom Fields</Label>
@@ -714,15 +703,42 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                         </div>
                     </div>
                 )}
-                {/* --- END OF DYNAMIC FIELDS AREA --- */}
             </div>
           </div>
 
+          {/* --- STATS BLOCK WITH REMAINING --- */}
+          {(isProcessing || results.length > 0) && (
+            <div className="pt-4 border-t border-dashed">
+                <div className="grid grid-cols-4 gap-4 text-center">
+                    <div>
+                        <Label className="text-xs text-muted-foreground">Time Elapsed</Label>
+                        <p className="text-lg font-bold font-mono">{formatDuration(jobState.processingTime)}</p>
+                    </div>
+                    <div>
+                        <Label className="text-xs text-muted-foreground">Success</Label>
+                        <p className="text-lg font-bold font-mono text-success flex items-center justify-center space-x-1">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span>{successCount}</span>
+                        </p>
+                    </div>
+                    <div>
+                        <Label className="text-xs text-muted-foreground">Failed</Label>
+                        <p className="text-lg font-bold font-mono text-destructive flex items-center justify-center space-x-1">
+                            <XCircle className="h-4 w-4" />
+                            <span>{errorCount}</span>
+                        </p>
+                    </div>
+                    <div>
+                        <Label className="text-xs text-muted-foreground">Remaining</Label>
+                        <p className="text-lg font-bold font-mono text-muted-foreground flex items-center justify-center space-x-1">
+                            <Hash className="h-4 w-4" />
+                            <span>{remainingCount >= 0 ? remainingCount : 0}</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+          )}
 
-          <hr className="my-4" />
-
-          <JobSummary jobState={jobState} />
-          
           <div className="mt-2 flex space-x-2">
             {!isProcessing && (
               <Button onClick={handleStart} className="w-full" disabled={!selectedProfileName || projects.length === 0 || jobState.formData.primaryValues.trim().length === 0 || !autoTaskListId}>

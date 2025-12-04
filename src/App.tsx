@@ -1,4 +1,4 @@
-// --- FILE: src/App.tsx (MODIFIED) ---
+// --- FILE: src/App.tsx ---
 import React, { useState, useEffect, useRef } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -66,7 +66,7 @@ export interface Profile {
     zsoid?: string;
   };
 }
-// ... (All other interfaces like TicketFormData, InvoiceFormData, etc. are unchanged) ...
+
 export interface TicketFormData {
   emails: string;
   subject: string;
@@ -115,6 +115,7 @@ export interface TicketResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date;
 }
 export interface CatalystSignupFormData {
   emails: string;
@@ -152,13 +153,16 @@ export interface QntrlFormData {
   bulkDefaultData: { [key: string]: string };
   bulkDelay: number;
 }
+// --- MODIFIED: Added timestamp to QntrlResult ---
 export interface QntrlResult {
   primaryValue: string;
   success: boolean;
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date;
 }
+// ------------------------------------------------
 export interface QntrlJobState {
     formData: QntrlFormData;
     results: QntrlResult[];
@@ -250,6 +254,7 @@ export interface CreatorResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date; 
 }
 export interface CreatorJobState {
     formData: CreatorFormData;
@@ -286,6 +291,7 @@ export interface ProjectsResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date;
 }
 export interface ProjectsJobState {
     formData: ProjectsFormData; 
@@ -320,7 +326,7 @@ export interface WebinarResult {
   fullResponse?: any;
   displayName?: string;
   subject?: string;
-  number?: number; // <-- ADDED
+  number?: number; 
 }
 export interface WebinarJobState {
     formData: WebinarFormData; 
@@ -339,7 +345,6 @@ export interface WebinarJobs {
     [profileName: string]: WebinarJobState;
 }
 
-// ... (All createInitial...State functions are unchanged) ...
 const createInitialJobState = (): JobState => ({
   formData: {
     emails: '',
@@ -557,21 +562,17 @@ const MainApp = () => {
             toast({ title: "Connected to server!" });
         });
         
-        // ... (All other socket.on listeners are unchanged) ...
         socket.on('ticketResult', (result: TicketResult & { profileName: string }) => {
           setJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialJobState();
             const isLastTicket = profileJob.results.length + 1 >= profileJob.totalTicketsToProcess;
-            
-            // --- ADDED: Capture the current time ---
             const resultWithTime = { ...result, timestamp: new Date() };
-            // ---------------------------------------
 
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, resultWithTime], // Use resultWithTime
+                results: [...profileJob.results, resultWithTime], 
                 countdown: isLastTicket ? 0 : profileJob.currentDelay,
               }
             };
@@ -634,20 +635,27 @@ const MainApp = () => {
             };
           });
         });
+
+        // --- MODIFIED: Inject timestamp into Qntrl Results ---
         socket.on('qntrlResult', (result: QntrlResult & { profileName: string }) => {
           setQntrlJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialQntrlJobState();
             const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            
+            const resultWithTime = { ...result, timestamp: new Date() };
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime],
                 countdown: isLast ? 0 : profileJob.currentDelay,
               }
             };
           });
         });
+        // --- END MODIFIED ---
+
         socket.on('peopleResult', (result: PeopleResult & { profileName: string }) => {
           setPeopleJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialPeopleJobState();
@@ -666,11 +674,14 @@ const MainApp = () => {
           setCreatorJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialCreatorJobState();
             const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            
+            const resultWithTime = { ...result, timestamp: new Date() };
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime],
                 countdown: isLast ? 0 : profileJob.currentDelay,
               }
             };
@@ -679,7 +690,7 @@ const MainApp = () => {
         socket.on('projectsResult', (result: ProjectsResult & { profileName: string }) => {
           setProjectsJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialProjectsJobState();
-            const newResults = [...profileJob.results, result];
+            const newResults = [...profileJob.results, { ...result, timestamp: new Date() }];
             const isLast = newResults.length >= profileJob.totalToProcess;
             
             return {
@@ -693,32 +704,27 @@ const MainApp = () => {
           });
         });
 
-        // --- MODIFIED: 'webinarResult' listener ---
         socket.on('webinarResult', (result: WebinarResult & { profileName: string }) => {
           setWebinarJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialWebinarJobState();
             
-            // --- THIS IS THE NEW LOGIC ---
             const newResult = {
                 ...result,
-                number: profileJob.results.length + 1 // Add the number
+                number: profileJob.results.length + 1
             };
-            // Add new result to the START of the list
             const newResults = [newResult, ...profileJob.results]; 
-            // --- END NEW LOGIC ---
 
             const isLast = newResults.length >= profileJob.totalToProcess;
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: newResults, // Use new list
+                results: newResults,
                 countdown: isLast ? 0 : profileJob.currentDelay, 
               }
             };
           });
         });
-        // --- END MODIFIED ---
 
 
         const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar'}, title: string, description: string, variant?: "destructive") => {
@@ -775,7 +781,6 @@ const MainApp = () => {
         };
     }, [toast]);
     
-    // ... (All handler functions like handleOpenAddProfile, handleSaveProfile, etc. are unchanged) ...
     const handleOpenAddProfile = () => {
         setEditingProfile(null);
         setIsProfileModalOpen(true);

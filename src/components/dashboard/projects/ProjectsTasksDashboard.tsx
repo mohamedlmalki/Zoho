@@ -1,4 +1,4 @@
-// --- FILE: src/components/dashboard/projects/ProjectsTasksDashboard.tsx (FIXED) ---
+// --- FILE: src/components/dashboard/projects/ProjectsTasksDashboard.tsx ---
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Socket } from 'socket.io-client';
@@ -6,7 +6,6 @@ import { DashboardLayout } from '../DashboardLayout';
 import { useToast } from '@/hooks/use-toast';
 import { Profile } from '@/App';
 import { ProjectsJobs, ProjectsJobState, ZohoProject, ZohoTask } from './ProjectsDataTypes';
-// import { TaskForm } from './TaskForm'; // No longer needed
 import { TaskBulkForm } from './TaskBulkForm'; 
 import { TaskResultsDisplay } from './TaskResultsDisplay';
 import { TaskProgressTable } from './TaskProgressTable';
@@ -97,15 +96,7 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
   }, [handleFetchProjects]);
 
   const handleUpdateProjectName = useCallback(() => {
-      console.log("[CLIENT LOG] handleUpdateProjectName: Clicked. Checking data..."); 
       if (!socket || !activeProfileName || !selectedProfile || !selectedProjectId || !currentProjectName) {
-          console.error("[CLIENT LOG] Client-side validation FAILED:", { 
-              socket: !!socket,
-              activeProfileName,
-              selectedProfile: !!selectedProfile,
-              selectedProjectId,
-              currentProjectName
-          });
           toast({ title: "Error", description: "Cannot update, missing data.", variant: "destructive" });
           return;
       }
@@ -120,7 +111,6 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
           }
       };
 
-      console.log("[CLIENT LOG] Emitting 'updateProjectDetails' with data:", eventData); 
       socket.emit('updateProjectDetails', eventData); 
 
   }, [socket, activeProfileName, selectedProfile, selectedProjectId, currentProjectName, toast]); 
@@ -190,14 +180,12 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
     
     const handleUpdateProjectError = (e: { error: string }) => { 
         setIsUpdatingName(false);
-        console.error("[CLIENT LOG] Received 'projectsUpdateProjectError':", e.error); 
         toast({ title: "Error Updating Project", description: e.error, variant: "destructive" });
     };
     
     const handleBulkError = (e: { message: string }) => {
         if (isUpdatingName) {
             setIsUpdatingName(false);
-            console.error("[CLIENT LOG] Received 'bulkError':", e.message);
             toast({ title: "Error", description: e.message, variant: "destructive" });
         }
     };
@@ -290,37 +278,43 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
     ]
   }), [jobState, totalTasks, selectedProjectId, projects]);
 
-  // --- THIS IS THE FUNCTION WITH THE FIX ---
-  const updateJobState = (newState: Partial<ProjectsJobState>) => {
-    if (!activeProfileName) return;
-    setJobs((prevJobs) => ({
-      ...prevJobs,
-      [activeProfileName]: {
-        ...(prevJobs[activeProfileName || ''] || createInitialJobState()), // <-- THE FIX (was activeProfileGithu)
-        ...newState,
-      },
-    }));
-  };
-  // --- END OF FIX ---
-
   const handlePause = () => {
     if (socket && activeProfileName) {
       socket.emit('pauseJob', { profileName: activeProfileName, jobType: 'projects' });
-      updateJobState({ isPaused: true });
+      setJobs((prev) => ({
+        ...prev,
+        [activeProfileName]: {
+            ...prev[activeProfileName],
+            isPaused: true
+        }
+      }));
     }
   };
 
   const handleResume = () => {
     if (socket && activeProfileName) {
       socket.emit('resumeJob', { profileName: activeProfileName, jobType: 'projects' });
-      updateJobState({ isPaused: false });
+      setJobs((prev) => ({
+        ...prev,
+        [activeProfileName]: {
+            ...prev[activeProfileName],
+            isPaused: false
+        }
+      }));
     }
   };
 
   const handleEnd = () => {
     if (socket && activeProfileName) {
       socket.emit('endJob', { profileName: activeProfileName, jobType: 'projects' });
-      updateJobState({ isProcessing: false, isPaused: false });
+      setJobs((prev) => ({
+        ...prev,
+        [activeProfileName]: {
+            ...prev[activeProfileName],
+            isProcessing: false, 
+            isPaused: false
+        }
+      }));
     }
   };
 
@@ -368,6 +362,7 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
                                     socket={socket}
                                     jobState={jobState}
                                     setJobs={setJobs}
+                                    createInitialJobState={createInitialJobState} // <--- ADDED PROP
                                     autoTaskListId={autoTaskListId}
                                     selectedProjectId={selectedProjectId}
                                     currentProjectName={currentProjectName}
@@ -378,11 +373,21 @@ export const ProjectsTasksDashboard: React.FC<ProjectsTasksDashboardProps> = ({
                             </div>
                             <div>
                                 <TaskProgressTable 
-                                    jobState={jobState} 
-                                    onClear={handleClearJobLog}
-                                    onPause={handlePause}
-                                    onResume={handleResume}
-                                    onEnd={handleEnd}
+                                    results={jobState.results}
+                                    isProcessing={jobState.isProcessing}
+                                    isComplete={jobState.isComplete}
+                                    totalToProcess={jobState.totalToProcess}
+                                    countdown={jobState.countdown}
+                                    filterText={jobState.filterText}
+                                    onFilterTextChange={(text) => {
+                                        setJobs((prev) => ({
+                                            ...prev,
+                                            [activeProfileName!]: {
+                                                ...prev[activeProfileName!],
+                                                filterText: text,
+                                            },
+                                        }));
+                                    }}
                                 />
                             </div>
                         </div>
