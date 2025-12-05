@@ -1,4 +1,4 @@
-// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx (FIXED & SAFE) ---
+// --- FILE: src/components/dashboard/projects/TaskBulkForm.tsx ---
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ProjectsJobState, ZohoProject, ProjectsFormData, ProjectsJobs } from './ProjectsDataTypes';
-// --- Added Save icon ---
 import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye, Save, Upload, List, CheckCircle2, XCircle, Hash } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import {
@@ -29,7 +28,8 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 
-// --- Types for the Task Layout (from your Postman response) ---
+// ... (Keep your TaskLayoutField, TaskLayoutSection, TaskLayout interfaces and ImageToolDialog component as they are) ...
+
 interface TaskLayoutField {
     column_name: string;
     display_name: string;
@@ -50,9 +50,9 @@ interface TaskLayout {
     section_details: TaskLayoutSection[];
     status_details: any[]; 
 }
-// --- END NEW TYPES ---
 
 const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
+    // ... (Keep ImageToolDialog implementation same as before) ...
     const [imageUrl, setImageUrl] = useState('');
     const [altText, setAltText] = useState('');
     const [linkUrl, setLinkUrl] = useState('');
@@ -156,6 +156,7 @@ interface TaskBulkFormProps {
   setCurrentProjectName: React.Dispatch<React.SetStateAction<string>>;
   isUpdatingName: boolean;
   handleUpdateProjectName: () => void;
+  createInitialJobState?: () => ProjectsJobState; // Added to interface if needed, but not strictly required for the fix
 }
 
 export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({ 
@@ -182,14 +183,13 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
   const [isLoadingLayout, setIsLoadingLayout] = useState(false);
 
-  // --- UPDATED: Safe State Update ---
+  // --- FIX START: Safe State Update Logic ---
   const handleFormDataChange = useCallback((field: keyof ProjectsFormData, value: any) => {
     if (!selectedProfileName) return;
     setJobs((prev) => {
-      // Safety Check: If profile state doesn't exist, don't crash
-      if (!prev[selectedProfileName]) return prev;
+      // FIX: Use 'jobState' prop (which contains initial state) if 'prev[selectedProfileName]' is missing
+      const prevJobState = prev[selectedProfileName] || jobState;
       
-      const prevJobState = prev[selectedProfileName];
       return {
         ...prev,
         [selectedProfileName]: {
@@ -201,15 +201,14 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         },
       };
     });
-  }, [selectedProfileName, setJobs]); 
+  }, [selectedProfileName, setJobs, jobState]); 
 
-  // --- UPDATED: Safe Dynamic Field Update ---
   const handleDynamicFieldChange = useCallback((columnName: string, value: string) => {
     if (!selectedProfileName) return;
     setJobs((prev) => {
-      if (!prev[selectedProfileName]) return prev;
+      // FIX: Same fix here - ensure we default to jobState if missing
+      const prevJobState = prev[selectedProfileName] || jobState;
 
-      const prevJobState = prev[selectedProfileName];
       return {
         ...prev,
         [selectedProfileName]: {
@@ -224,7 +223,8 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
         },
       };
     });
-  }, [selectedProfileName, setJobs]); 
+  }, [selectedProfileName, setJobs, jobState]); 
+  // --- FIX END ---
 
   const onProjectChange = useCallback((newProjectId: string) => {
     handleFormDataChange('projectId', newProjectId);
@@ -235,6 +235,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
   }, [handleFormDataChange]); 
 
   useEffect(() => {
+    // This logic now works because handleFormDataChange properly initializes the state
     if (projects.length > 0 && !jobState.formData.projectId) { 
       onProjectChange(projects[0].id);
     }
@@ -706,7 +707,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
             </div>
           </div>
 
-          {/* --- STATS BLOCK WITH REMAINING --- */}
           {(isProcessing || results.length > 0) && (
             <div className="pt-4 border-t border-dashed">
                 <div className="grid grid-cols-4 gap-4 text-center">

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Send, Eye, Mail, Clock, MessageSquare, Users, Pause, Play, Square, Bot, Upload, Edit, RefreshCw, Trash2, MailWarning, CheckCircle2, XCircle, ImagePlus, Timer } from 'lucide-react';
+import { Send, Eye, Mail, Clock, MessageSquare, Users, Pause, Play, Square, Bot, Upload, Edit, RefreshCw, Trash2, MailWarning, CheckCircle2, XCircle, ImagePlus, Timer, AlertTriangle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Socket } from 'socket.io-client';
@@ -24,6 +24,7 @@ interface TicketFormData {
   sendDirectReply: boolean;
   verifyEmail: boolean;
   displayName: string;
+  stopAfterFailures: number; // --- ADDED THIS ---
 }
 
 interface TicketFormProps {
@@ -42,7 +43,7 @@ interface TicketFormProps {
   jobState: JobState | null;
 }
 
-// New component for the Image Insertion Dialog
+// ... (ImageToolDialog remains the same)
 const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
     const [imageUrl, setImageUrl] = useState('');
     const [altText, setAltText] = useState('');
@@ -64,7 +65,7 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
         const finalHtml = `<div style="${containerStyle}">${imgTag}</div>`;
         
         onApply(finalHtml);
-        setIsOpen(false); // Close the dialog
+        setIsOpen(false);
     };
 
     return (
@@ -80,6 +81,7 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
                     <DialogTitle>Add and Style Image</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
+                    {/* ... (Existing dialog inputs) ... */}
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="imageUrl" className="text-right">Image URL</Label>
                         <Input id="imageUrl" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="col-span-3" placeholder="https://example.com/image.png" />
@@ -125,7 +127,6 @@ const ImageToolDialog = ({ onApply }: { onApply: (html: string) => void }) => {
     );
 };
 
-
 export const TicketForm: React.FC<TicketFormProps> = ({
   onSubmit,
   isProcessing,
@@ -146,6 +147,7 @@ export const TicketForm: React.FC<TicketFormProps> = ({
   const { toast } = useToast();
   const [isLoadingName, setIsLoadingName] = useState(false);
 
+  // ... (Existing useEffects for name fetching) ...
   const fetchDisplayName = () => {
       if (selectedProfile?.desk?.mailReplyAddressId && socket) {
           setIsLoadingName(true);
@@ -190,6 +192,7 @@ export const TicketForm: React.FC<TicketFormProps> = ({
            toast({ title: "Success", description: "Sender name has been updated." });
       }
   };
+
 
   const emailCount = useMemo(() => {
     return formData.emails
@@ -241,7 +244,6 @@ export const TicketForm: React.FC<TicketFormProps> = ({
     onFormDataChange({ ...formData, description: formData.description + '\n' + html });
   };
 
-  // --- ADDED: Estimated Time Calculation ---
   const estimatedTime = useMemo(() => {
     if (emailCount === 0) return null;
     const totalSeconds = emailCount * (formData.delay || 0);
@@ -259,7 +261,6 @@ export const TicketForm: React.FC<TicketFormProps> = ({
 
     return parts.join(' ');
   }, [emailCount, formData.delay]);
-  // -----------------------------------------
 
   const successCount = jobState?.results.filter(r => r.success).length || 0;
   const errorCount = jobState?.results.filter(r => !r.success).length || 0;
@@ -332,10 +333,8 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                   disabled={isProcessing}
                 />
                 
-
                 {jobState && (jobState.isProcessing || jobState.results.length > 0) && (
                     <div className="pt-4 border-t border-dashed">
-                        {/* --- MODIFIED: Added Remaining Counter --- */}
                         <div className="grid grid-cols-4 gap-4 text-center">
                             <div>
                                 <Label className="text-xs text-muted-foreground">Time Elapsed</Label>
@@ -363,7 +362,6 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                                 </p>
                             </div>
                         </div>
-                        {/* ----------------------------------------- */}
                     </div>
                 )}
 
@@ -390,7 +388,6 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                     </div>
                 </div>
 
-                {/* --- ADDED: Estimated Duration Card --- */}
                 {emailCount > 0 && (
                     <div className="pt-4 border-t border-dashed">
                         <div className="rounded-md bg-primary/5 border border-primary/20 p-3">
@@ -409,7 +406,6 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                         </div>
                     </div>
                 )}
-                {/* -------------------------------------- */}
 
               </div>
             </div>
@@ -463,26 +459,50 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="delay" className="flex items-center space-x-2">
-                  <Clock className="h-4 w-4" />
-                  <span>Delay Between Tickets</span>
-                </Label>
-                <div className="flex items-center space-x-3">
-                  <Input
-                    id="delay"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={formData.delay}
-                    onChange={(e) => handleInputChange('delay', parseInt(e.target.value) || 0)}
-                    className="w-24 h-12 bg-muted/30 border-border focus:bg-card transition-colors"
-                    required
-                    disabled={isProcessing}
-                  />
-                  <span className="text-sm text-muted-foreground">seconds</span>
-                </div>
+              {/* --- ADDED: NEW INPUT FOR AUTO-PAUSE --- */}
+              <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="delay" className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4" />
+                      <span>Delay Between Tickets</span>
+                    </Label>
+                    <div className="flex items-center space-x-3">
+                      <Input
+                        id="delay"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={formData.delay}
+                        onChange={(e) => handleInputChange('delay', parseInt(e.target.value) || 0)}
+                        className="bg-muted/30 border-border focus:bg-card transition-colors"
+                        required
+                        disabled={isProcessing}
+                      />
+                      <span className="text-sm text-muted-foreground">sec</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="stopAfterFailures" className="flex items-center space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <span>Auto-Pause (Failures)</span>
+                    </Label>
+                    <div className="flex items-center space-x-3">
+                      <Input
+                        id="stopAfterFailures"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={formData.stopAfterFailures}
+                        onChange={(e) => handleInputChange('stopAfterFailures', parseInt(e.target.value) || 0)}
+                        className="bg-muted/30 border-border focus:bg-card transition-colors"
+                        disabled={isProcessing}
+                      />
+                      <span className="text-xs text-muted-foreground w-max">0 to disable</span>
+                    </div>
+                  </div>
               </div>
+              {/* -------------------------------------- */}
 
               <div className="space-y-2 pt-2">
                   <Label className="flex items-center space-x-2">
@@ -524,7 +544,6 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                     <span>Ticket Description</span>
                   </Label>
                   <div className="flex items-center space-x-2">
-                    {/* *** NEW IMAGE TOOL BUTTON AND DIALOG *** */}
                     <ImageToolDialog onApply={handleApplyImage} />
                     <Dialog>
                       <DialogTrigger asChild>

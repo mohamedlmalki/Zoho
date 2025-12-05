@@ -26,7 +26,7 @@ import PeopleForms from './pages/PeopleForms';
 import CreatorForms from './pages/CreatorForms';
 import ProjectsTasksPage from './pages/ProjectsTasksPage';
 import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
-import LiveStats from '@/pages/LiveStats'; // Import the new page
+import LiveStats from '@/pages/LiveStats';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
@@ -76,6 +76,7 @@ export interface TicketFormData {
   sendDirectReply: boolean;
   verifyEmail: boolean;
   displayName: string;
+  stopAfterFailures: number; // --- ADDED THIS ---
 }
 export interface InvoiceFormData {
   emails: string;
@@ -154,7 +155,6 @@ export interface QntrlFormData {
   bulkDefaultData: { [key: string]: string };
   bulkDelay: number;
 }
-// --- MODIFIED: Added timestamp to QntrlResult ---
 export interface QntrlResult {
   primaryValue: string;
   success: boolean;
@@ -163,7 +163,6 @@ export interface QntrlResult {
   fullResponse?: any;
   timestamp?: Date;
 }
-// ------------------------------------------------
 export interface QntrlJobState {
     formData: QntrlFormData;
     results: QntrlResult[];
@@ -355,6 +354,7 @@ const createInitialJobState = (): JobState => ({
     sendDirectReply: false,
     verifyEmail: false,
     displayName: '',
+    stopAfterFailures: 0, // --- ADDED THIS DEFAULT ---
   },
   results: [],
   isProcessing: false,
@@ -593,6 +593,27 @@ const MainApp = () => {
             }
           });
         });
+
+        // --- NEW LISTENER FOR AUTOMATIC PAUSE ---
+        socket.on('jobPaused', (data: { profileName: string, reason: string }) => {
+            setJobs(prevJobs => {
+                if (!prevJobs[data.profileName]) return prevJobs;
+                return {
+                    ...prevJobs,
+                    [data.profileName]: {
+                        ...prevJobs[data.profileName],
+                        isPaused: true
+                    }
+                };
+            });
+            toast({ 
+                title: "Job Paused Automatically", 
+                description: data.reason, 
+                variant: "destructive" 
+            });
+        });
+        // ----------------------------------------
+
         socket.on('invoiceResult', (result: InvoiceResult & { profileName: string }) => {
             setInvoiceJobs(prevJobs => {
                 const profileJob = prevJobs[result.profileName] || createInitialInvoiceJobState();
@@ -636,8 +657,6 @@ const MainApp = () => {
             };
           });
         });
-
-        // --- MODIFIED: Inject timestamp into Qntrl Results ---
         socket.on('qntrlResult', (result: QntrlResult & { profileName: string }) => {
           setQntrlJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialQntrlJobState();
@@ -655,14 +674,11 @@ const MainApp = () => {
             };
           });
         });
-        // --- END MODIFIED ---
-
         socket.on('peopleResult', (result: PeopleResult & { profileName: string }) => {
           setPeopleJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialPeopleJobState();
             const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
             
-            // --- FIX: Add timestamp so the table can display the time ---
             const resultWithTime = { ...result, timestamp: new Date() };
 
             return {
@@ -786,6 +802,7 @@ const MainApp = () => {
         };
     }, [toast]);
     
+    // ... (rest of the file remains same)
     const handleOpenAddProfile = () => {
         setEditingProfile(null);
         setIsProfileModalOpen(true);
@@ -853,6 +870,7 @@ const MainApp = () => {
                             />
                         }
                     />
+                    {/* ... other routes ... */}
                     <Route
                         path="/single-ticket"
                         element={
