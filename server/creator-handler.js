@@ -118,11 +118,18 @@ const handleStartBulkInsertCreatorRecords = async (socket, data) => {
         bulkPrimaryField,
         bulkPrimaryValues,
         bulkDefaultData,
-        bulkDelay 
+        bulkDelay,
+        stopAfterFailures = 0 // --- ADDED DEFAULT ---
     } = data;
     
     const jobId = createJobId(socket.id, selectedProfileName, 'creator');
-    activeJobs[jobId] = { status: 'running' };
+    
+    // Initialize job
+    activeJobs[jobId] = { 
+        status: 'running',
+        consecutiveFailures: 0,
+        stopAfterFailures: Number(stopAfterFailures) 
+    };
 
     try {
         if (!activeProfile || !activeProfile.creator) {
@@ -137,9 +144,29 @@ const handleStartBulkInsertCreatorRecords = async (socket, data) => {
         
         for (let i = 0; i < bulkPrimaryValues.length; i++) {
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+            
+            // Wait while paused
             while (activeJobs[jobId]?.status === 'paused') {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
+
+            // --- AUTO-PAUSE CHECK (Before Start) ---
+            if (activeJobs[jobId].stopAfterFailures > 0 && 
+                activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
+                 
+                 if (activeJobs[jobId].status !== 'paused') {
+                     activeJobs[jobId].status = 'paused';
+                     socket.emit('jobPaused', { 
+                        profileName: selectedProfileName, 
+                        reason: `Paused automatically after ${activeJobs[jobId].consecutiveFailures} consecutive failures.` 
+                     });
+                 }
+                 while (activeJobs[jobId]?.status === 'paused') {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                 }
+            }
+            // ----------------------------------------
+
             if (i > 0 && bulkDelay > 0) await interruptibleSleep(bulkDelay * 1000, jobId);
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
 
@@ -172,6 +199,9 @@ const handleStartBulkInsertCreatorRecords = async (socket, data) => {
                      throw new Error(response.data.message || "An unknown error occurred.");
                 }
 
+                // Success! Reset failure counter
+                if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures = 0;
+
                 socket.emit('creatorResult', { 
                     primaryValue, 
                     success: true, 
@@ -181,6 +211,9 @@ const handleStartBulkInsertCreatorRecords = async (socket, data) => {
                 });
 
             } catch (error) {
+                // Failure! Increment counter
+                if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures++;
+
                 const { message, fullResponse } = parseError(error);
                 socket.emit('creatorResult', { 
                     primaryValue, 

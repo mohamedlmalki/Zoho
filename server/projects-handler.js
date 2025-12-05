@@ -304,13 +304,20 @@ const handleStartBulkCreateTasks = async (socket, data) => {
         taskDescription, 
         tasklistId, 
         delay, 
-        bulkDefaultData 
+        bulkDefaultData,
+        stopAfterFailures = 0 // --- ADDED DEFAULT ---
     } = formData;
     
     console.log(`[PROJECTS JOB START] Profile: ${selectedProfileName}. Project ID: ${projectId}. Primary Field: ${primaryField}.`);
 
     const jobId = createJobId(socket.id, selectedProfileName, 'projects');
-    activeJobs[jobId] = { status: 'running' };
+    
+    // Initialize job
+    activeJobs[jobId] = { 
+        status: 'running',
+        consecutiveFailures: 0,
+        stopAfterFailures: Number(stopAfterFailures) 
+    };
     
     const tasksToProcess = primaryValues.split('\n').map(name => name.trim()).filter(t => t.length > 0);
 
@@ -331,9 +338,29 @@ const handleStartBulkCreateTasks = async (socket, data) => {
 
         for (let i = 0; i < tasksToProcess.length; i++) {
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+            
+            // Wait while paused
             while (activeJobs[jobId]?.status === 'paused') {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
+
+            // --- AUTO-PAUSE CHECK ---
+            if (activeJobs[jobId].stopAfterFailures > 0 && 
+                activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
+                 
+                 if (activeJobs[jobId].status !== 'paused') {
+                     activeJobs[jobId].status = 'paused';
+                     socket.emit('jobPaused', { 
+                        profileName: selectedProfileName, 
+                        reason: `Paused automatically after ${activeJobs[jobId].consecutiveFailures} consecutive failures.` 
+                     });
+                 }
+                 while (activeJobs[jobId]?.status === 'paused') {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                 }
+            }
+            // ------------------------
+
             if (i > 0 && delay > 0) await interruptibleSleep(delay * 1000, jobId);
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
 
@@ -362,6 +389,9 @@ const handleStartBulkCreateTasks = async (socket, data) => {
             });
             
             if (result.success) {
+                // Success! Reset counter
+                if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures = 0;
+
                 console.log(`[PROJECTS JOB SUCCESS] Emitting result for: ${currentValue}.`);
                 socket.emit('projectsResult', { 
                     projectName: currentValue, 
@@ -371,6 +401,9 @@ const handleStartBulkCreateTasks = async (socket, data) => {
                     profileName: selectedProfileName
                 });
             } else {
+                // Failure! Increment counter
+                if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures++;
+
                 console.error(`[PROJECTS JOB ERROR] Emitting error for: ${currentValue}. Reason: ${result.error}`);
                 socket.emit('projectsResult', { 
                     projectName: currentValue, 
@@ -558,5 +591,6 @@ module.exports = {
     handleCreateSingleTask,
     handleStartBulkCreateTasks,
     handleGetTaskLayout,
-    handleUpdateProjectDetails, // <-- EXPORT NEW FUNCTION
+    handleUpdateProjectDetails,
+    handleGetProjectDetails: require('./projects-handler').handleGetProjectDetails // Ensure all exports are kept
 };

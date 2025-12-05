@@ -493,12 +493,17 @@ export const TicketForm: React.FC<TicketFormProps> = ({
                         type="number"
                         min="0"
                         step="1"
-                        value={formData.stopAfterFailures}
-                        onChange={(e) => handleInputChange('stopAfterFailures', parseInt(e.target.value) || 0)}
-                        className="bg-muted/30 border-border focus:bg-card transition-colors"
+                        placeholder="0 (Disabled)"
+                        // If value is 0, show empty string so placeholder appears
+                        value={formData.stopAfterFailures === 0 ? '' : formData.stopAfterFailures}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            // If empty, set to 0. Otherwise parse int.
+                            handleInputChange('stopAfterFailures', val === '' ? 0 : parseInt(val));
+                        }}
+                        className="bg-muted/30 border-border focus:bg-card transition-colors placeholder:text-muted-foreground/70"
                         disabled={isProcessing}
                       />
-                      <span className="text-xs text-muted-foreground w-max">0 to disable</span>
                     </div>
                   </div>
               </div>

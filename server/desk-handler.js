@@ -1,3 +1,5 @@
+// --- FILE: server/desk-handler.js ---
+
 const { makeApiCall, parseError, writeToTicketLog, createJobId, readTicketLog, readProfiles } = require('./utils');
 
 let activeJobs = {};
@@ -87,7 +89,6 @@ const handleVerifyTicketEmail = async (data) => {
     if (!activeProfile) {
         return { success: false, details: 'Profile not found for verification.' };
     }
-    // Pass null for the socket parameter since this is an HTTP request
     return await verifyTicketEmail(null, { ticket, profile: activeProfile });
 };
 
@@ -147,27 +148,60 @@ const handleSendTestTicket = async (socket, data) => {
 };
 
 const handleStartBulkCreate = async (socket, data) => {
-    const { emails, subject, description, delay, selectedProfileName, sendDirectReply, verifyEmail, activeProfile } = data;
+    const { 
+        emails, 
+        subject, 
+        description, 
+        delay, 
+        selectedProfileName, 
+        sendDirectReply, 
+        verifyEmail, 
+        activeProfile,
+        stopAfterFailures = 0
+    } = data;
     
     const jobId = createJobId(socket.id, selectedProfileName, 'ticket');
-    activeJobs[jobId] = { status: 'running' };
-
+    
+    // Initialize job with failure counters
+    activeJobs[jobId] = { 
+        status: 'running',
+        consecutiveFailures: 0,
+        stopAfterFailures: Number(stopAfterFailures) 
+    };
+    
     try {
-        if (!activeProfile) {
-            throw new Error('Profile not found.');
-        }
-
+        if (!activeProfile) throw new Error('Profile not found.');
         const deskConfig = activeProfile.desk;
-
-        if (sendDirectReply && !deskConfig.fromEmailAddress) {
-            throw new Error(`Profile "${selectedProfileName}" is missing "fromEmailAddress".`);
-        }
+        if (sendDirectReply && !deskConfig.fromEmailAddress) throw new Error(`Profile "${selectedProfileName}" is missing "fromEmailAddress".`);
         
         for (let i = 0; i < emails.length; i++) {
+            // Check Status (Running/Paused/Ended)
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+            
+            // Wait while paused (Blocking the CREATION loop only)
             while (activeJobs[jobId]?.status === 'paused') {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
+
+            // --- FIX 1: Check if already paused to avoid double alerts in main loop ---
+            if (activeJobs[jobId].stopAfterFailures > 0 && 
+                activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
+                 
+                 // Only emit if not ALREADY paused
+                 if (activeJobs[jobId].status !== 'paused') {
+                     activeJobs[jobId].status = 'paused';
+                     socket.emit('jobPaused', { 
+                        profileName: selectedProfileName, 
+                        reason: `Paused automatically after ${activeJobs[jobId].consecutiveFailures} failures detected.` 
+                     });
+                 }
+                 
+                 // Stay in loop but paused, waiting for user resume
+                 while (activeJobs[jobId]?.status === 'paused') {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                 }
+            }
+
             if (i > 0 && delay > 0) await interruptibleSleep(delay * 1000, jobId);
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
 
@@ -178,19 +212,20 @@ const handleStartBulkCreate = async (socket, data) => {
                 subject, 
                 description, 
                 departmentId: deskConfig.defaultDepartmentId, 
-                contact: { email },
+                contact: { email }, 
                 channel: 'Email' 
             };
-
+            
             try {
+                // --- STEP 1: Create Ticket (Sync) ---
                 const ticketResponse = await makeApiCall('post', '/api/v1/tickets', ticketData, activeProfile, 'desk');
                 const newTicket = ticketResponse.data;
                 let successMessage = `Ticket #${newTicket.ticketNumber} created.`;
                 let fullResponseData = { ticketCreate: newTicket };
-                let overallSuccess = true; 
-
+                
                 writeToTicketLog({ ticketNumber: newTicket.ticketNumber, email });
 
+                // --- STEP 2: Reply (Sync) ---
                 if (sendDirectReply) {
                     try {
                         const replyData = {
@@ -200,40 +235,45 @@ const handleStartBulkCreate = async (socket, data) => {
                             contentType: 'html',
                             channel: 'EMAIL'
                         };
-
                         const replyResponse = await makeApiCall('post', `/api/v1/tickets/${newTicket.id}/sendReply`, replyData, activeProfile, 'desk');
-                        
                         successMessage = `Ticket #${newTicket.ticketNumber} created and reply sent.`;
                         fullResponseData.sendReply = replyResponse.data;
                     } catch (replyError) {
-                        overallSuccess = false;
                         const { message } = parseError(replyError);
                         successMessage = `Ticket #${newTicket.ticketNumber} created, but reply failed: ${message}`;
                         fullResponseData.sendReply = { error: parseError(replyError) };
                     }
                 }
 
+                // EMIT SUCCESS IMMEDIATELY
                 socket.emit('ticketResult', { 
                     email, 
-                    success: overallSuccess,
+                    success: true, 
                     ticketNumber: newTicket.ticketNumber, 
                     details: successMessage,
                     fullResponse: fullResponseData,
                     profileName: selectedProfileName
                 });
 
+                // --- STEP 3: Verify (Background / Fire-and-Forget) ---
                 if (verifyEmail) {
-                    verifyTicketEmail(socket, { ticket: newTicket, profile: activeProfile });
+                    verifyTicketEmail(socket, { 
+                        ticket: newTicket, 
+                        profile: activeProfile, 
+                        jobId: jobId 
+                    });
                 }
 
             } catch (error) {
+                // Creation Failed
+                activeJobs[jobId].consecutiveFailures++;
                 const { message, fullResponse } = parseError(error);
                 socket.emit('ticketResult', { email, success: false, error: message, fullResponse, profileName: selectedProfileName });
             }
         }
 
     } catch (error) {
-        socket.emit('bulkError', { message: error.message || 'A critical server error occurred.', profileName: selectedProfileName, jobType: 'ticket' });
+        socket.emit('bulkError', { message: error.message || 'Error', profileName: selectedProfileName, jobType: 'ticket' });
     } finally {
         if (activeJobs[jobId]) {
             const finalStatus = activeJobs[jobId].status;
@@ -247,12 +287,15 @@ const handleStartBulkCreate = async (socket, data) => {
     }
 };
 
-const verifyTicketEmail = async (socket, { ticket, profile, resultEventName = 'ticketUpdate' }) => {
+const verifyTicketEmail = async (socket, { ticket, profile, resultEventName = 'ticketUpdate', jobId }) => {
     let fullResponse = { ticketCreate: ticket, verifyEmail: {} };
+    
     try {
-        if (socket) { // Only delay for WebSocket-based calls
+        if (socket) { 
             await new Promise(resolve => setTimeout(resolve, 10000));
         }
+
+        if (jobId && activeJobs[jobId] && activeJobs[jobId].status === 'ended') return;
         
         const [workflowHistoryResponse, notificationHistoryResponse] = await Promise.all([
             makeApiCall('get', `/api/v1/tickets/${ticket.id}/History?eventFilter=WorkflowHistory`, null, profile, 'desk'),
@@ -266,45 +309,89 @@ const verifyTicketEmail = async (socket, { ticket, profile, resultEventName = 't
         
         fullResponse.verifyEmail.history = { workflowHistory: workflowHistoryResponse.data, notificationHistory: notificationHistoryResponse.data };
 
-        let result;
         if (allHistoryEvents.length > 0) {
-            result = {
-                success: true, 
-                details: 'Email verification: Sent successfully.',
-                fullResponse,
-            };
+            if (jobId && activeJobs[jobId]) {
+                activeJobs[jobId].consecutiveFailures = 0;
+            }
+
+            if (socket) {
+                socket.emit(resultEventName, { 
+                    ticketNumber: ticket.ticketNumber, 
+                    success: true,
+                    details: 'Verified: Automation email sent successfully.',
+                    fullResponse, 
+                    profileName: profile.profileName 
+                });
+            }
+            return { success: true };
+
         } else {
             const failureResponse = await makeApiCall('get', `/api/v1/emailFailureAlerts?department=${profile.desk.defaultDepartmentId}`, null, profile, 'desk');
             const failure = failureResponse.data.data?.find(f => String(f.ticketNumber) === String(ticket.ticketNumber));
-            fullResponse.verifyEmail.failure = failure || "No specific failure found for this ticket.";
+            fullResponse.verifyEmail.failure = failure || "No specific failure found.";
             
-            result = {
-                success: false, 
-                details: failure ? `Email verification: Failed. Reason: ${failure.reason}` : 'Email verification: Not Found.',
-                fullResponse,
-            };
-        }
-        
-        if (socket) {
-            socket.emit(resultEventName, { ticketNumber: ticket.ticketNumber, ...result, profileName: profile.profileName });
-        } else {
-            return result;
+            if (jobId && activeJobs[jobId]) {
+                activeJobs[jobId].consecutiveFailures++;
+                
+                // CHECK AUTO-PAUSE
+                if (activeJobs[jobId].stopAfterFailures > 0 && 
+                    activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
+                    
+                    // --- FIX 2: Only emit if NOT ALREADY PAUSED ---
+                    if (activeJobs[jobId].status !== 'paused') {
+                        activeJobs[jobId].status = 'paused';
+                        
+                        socket.emit('jobPaused', { 
+                            profileName: profile.profileName, 
+                            reason: `Paused automatically: Ticket #${ticket.ticketNumber} verification failed (${activeJobs[jobId].consecutiveFailures} in a row).` 
+                        });
+                    }
+                }
+            }
+
+            if (socket) {
+                socket.emit(resultEventName, { 
+                    ticketNumber: ticket.ticketNumber, 
+                    success: false, 
+                    details: failure ? `Verification Failed: ${failure.reason}` : 'Verification Failed: No automation history found.',
+                    fullResponse,
+                    profileName: profile.profileName 
+                });
+            }
+            return { success: false };
         }
 
     } catch (error) {
         const { message, fullResponse: errorResponse } = parseError(error);
-        console.error(`Failed to verify email for ticket #${ticket.ticketNumber}:`, message);
         fullResponse.verifyEmail.error = errorResponse;
-        const result = {
-            success: false,
-            details: `Email verification: Failed to check status.`,
-            fullResponse,
-        };
-        if (socket) {
-            socket.emit(resultEventName, { ticketNumber: ticket.ticketNumber, ...result, profileName: profile.profileName });
-        } else {
-            return result;
+        
+        if (jobId && activeJobs[jobId]) {
+            activeJobs[jobId].consecutiveFailures++;
+             
+             if (activeJobs[jobId].stopAfterFailures > 0 && 
+                activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
+                
+                // --- FIX 3: Only emit if NOT ALREADY PAUSED ---
+                if (activeJobs[jobId].status !== 'paused') {
+                    activeJobs[jobId].status = 'paused';
+                    socket.emit('jobPaused', { 
+                        profileName: profile.profileName, 
+                        reason: `Paused automatically: Error verifying ticket #${ticket.ticketNumber}.` 
+                    });
+                }
+            }
         }
+
+        if (socket) {
+             socket.emit(resultEventName, { 
+                ticketNumber: ticket.ticketNumber, 
+                success: false, 
+                details: `Verification Error: ${message}`,
+                fullResponse,
+                profileName: profile.profileName 
+            });
+        }
+        return { success: false };
     }
 };
 

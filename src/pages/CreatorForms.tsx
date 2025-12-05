@@ -17,7 +17,7 @@ import {
 import { 
     FileText, RefreshCw, Loader2, Send, Clock, 
     Pause, Play, Square, CheckCircle2, XCircle,
-    ImagePlus, Eye, Users, Hash
+    ImagePlus, Eye, Users, Hash, AlertTriangle 
 } from 'lucide-react';
 import {
   Select,
@@ -404,6 +404,8 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
     bulkDelay 
   } = formData;
 
+  const stopAfterFailures = (formData as any).stopAfterFailures || 0;
+
   const selectedForm = useMemo(() => {
     return forms.find(form => form.link_name === selectedFormLinkName);
   }, [forms, selectedFormLinkName]);
@@ -416,13 +418,11 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
       return formFields.find(f => f.type === 3 || f.link_name.includes('Email'))?.link_name || null;
   }, [formFields]);
 
-  // --- ADDED: Primary Values Counter ---
   const primaryValuesCount = useMemo(() => {
     return bulkPrimaryValues
       .split('\n')
       .filter(line => line.trim() !== '').length;
   }, [bulkPrimaryValues]);
-  // -------------------------------------
 
   useEffect(() => {
     if (!bulkPrimaryField && !activeJob.isProcessing) {
@@ -590,7 +590,7 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
       });
   };
 
-  const handleFormStateChange = (field: keyof CreatorFormData, value: any) => {
+  const handleFormStateChange = (field: keyof CreatorFormData | 'stopAfterFailures', value: any) => {
     if (selectedProfile) {
       setJobs(prev => {
         const currentJob = prev[selectedProfile.profileName] || createInitialJobState();
@@ -667,7 +667,8 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
         bulkPrimaryValues: primaryValues,
         bulkDefaultData: bulkDefaultData,
         bulkDelay: bulkDelay,
-        activeProfile: selectedProfile
+        activeProfile: selectedProfile,
+        stopAfterFailures: stopAfterFailures
     });
   };
 
@@ -847,7 +848,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
-                                            {/* --- MODIFIED: Added Counter Badge --- */}
                                             <div className="flex items-center justify-between">
                                                 <Label htmlFor="primary-values">
                                                     {formFields.find(f => f.link_name === bulkPrimaryField)?.display_name || 'Values'} (one per line)
@@ -857,7 +857,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
                                                     {primaryValuesCount} records
                                                 </Badge>
                                             </div>
-                                            {/* -------------------------------------- */}
                                             <Textarea
                                                 id="primary-values"
                                                 placeholder="Value 1&#x0A;Value 2&#x0A;Value 3"
@@ -867,18 +866,42 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
                                                 disabled={activeJob.isProcessing}
                                             />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="delay">Delay Between Records (seconds)</Label>
-                                            <Input
-                                                id="delay"
-                                                type="number"
-                                                min="0"
-                                                step="1"
-                                                value={bulkDelay}
-                                                onChange={(e) => handleFormStateChange('bulkDelay', parseInt(e.target.value) || 0)}
-                                                className="w-24"
-                                                disabled={activeJob.isProcessing}
-                                            />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="delay" className="flex items-center space-x-2">
+                                                    <Clock className="h-4 w-4" />
+                                                    <span>Delay (sec)</span>
+                                                </Label>
+                                                <Input
+                                                    id="delay"
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={bulkDelay}
+                                                    onChange={(e) => handleFormStateChange('bulkDelay', parseInt(e.target.value) || 0)}
+                                                    disabled={activeJob.isProcessing}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="stopAfterFailures" className="flex items-center space-x-2">
+                                                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                                    <span>Auto-Pause</span>
+                                                </Label>
+                                                <Input
+                                                    id="stopAfterFailures"
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    placeholder="0 (Disabled)"
+                                                    value={stopAfterFailures === 0 ? '' : stopAfterFailures}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        handleFormStateChange('stopAfterFailures' as any, val === '' ? 0 : parseInt(val));
+                                                    }}
+                                                    className="placeholder:text-muted-foreground/70"
+                                                    disabled={activeJob.isProcessing}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                     
@@ -902,7 +925,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
 
                             {activeJob && (activeJob.isProcessing || activeJob.results.length > 0) && (
                                 <div className="pt-4 border-t border-dashed">
-                                    {/* --- MODIFIED: Added Remaining Counter --- */}
                                     <div className="grid grid-cols-4 gap-4 text-center">
                                         <div>
                                             <Label className="text-xs text-muted-foreground">Time Elapsed</Label>
@@ -930,7 +952,6 @@ const CreatorForms: React.FC<CreatorFormsProps> = (props) => {
                                             </p>
                                         </div>
                                     </div>
-                                    {/* ----------------------------------------- */}
                                 </div>
                             )}
                         </CardContent>

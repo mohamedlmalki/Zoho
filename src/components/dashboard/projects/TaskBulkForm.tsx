@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ProjectsJobState, ZohoProject, ProjectsFormData, ProjectsJobs } from './ProjectsDataTypes';
-import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye, Save, Upload, List, CheckCircle2, XCircle, Hash } from 'lucide-react';
+import { Loader2, Play, Pause, Square, ListFilterIcon, ImagePlus, Eye, Save, Upload, List, CheckCircle2, XCircle, Hash, AlertTriangle } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import {
     DropdownMenu,
@@ -183,8 +183,11 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
   const [isLoadingLayout, setIsLoadingLayout] = useState(false);
 
+  // Safely access stopAfterFailures from formData (needs interface update or cast)
+  const stopAfterFailures = (jobState.formData as any).stopAfterFailures || 0;
+
   // --- FIX START: Safe State Update Logic ---
-  const handleFormDataChange = useCallback((field: keyof ProjectsFormData, value: any) => {
+  const handleFormDataChange = useCallback((field: keyof ProjectsFormData | 'stopAfterFailures', value: any) => {
     if (!selectedProfileName) return;
     setJobs((prev) => {
       // FIX: Use 'jobState' prop (which contains initial state) if 'prev[selectedProfileName]' is missing
@@ -346,6 +349,7 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
       ...jobState.formData, 
       tasklistId: autoTaskListId, 
       displayName: selectedProfileName,
+      stopAfterFailures: stopAfterFailures // --- ADDED THIS ---
     };
 
     setJobs((prevJobs: any) => ({
@@ -553,14 +557,29 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
               />
             </div>
 
+            {/* --- NEW: Auto Pause Input --- */}
             <div className="grid gap-2">
-              <Label>Tasks in Queue</Label>
+              <Label htmlFor="stopAfterFailures" className="flex items-center space-x-1 whitespace-nowrap">
+                <AlertTriangle className="h-3 w-3 text-amber-500" />
+                <span>Auto-Pause</span>
+              </Label>
               <Input
-                value={primaryValuesCount} 
-                readOnly
-                className="bg-muted"
+                id="stopAfterFailures"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="0 (Disabled)"
+                value={stopAfterFailures === 0 ? '' : stopAfterFailures}
+                onChange={(e) => {
+                    const val = e.target.value;
+                    handleFormDataChange('stopAfterFailures' as any, val === '' ? 0 : parseInt(val));
+                }}
+                className="placeholder:text-muted-foreground/70"
+                disabled={isProcessing}
               />
             </div>
+            {/* ----------------------------- */}
+
           </div>
 
           <hr className="my-4" />
@@ -591,7 +610,6 @@ export const TaskBulkForm: React.FC<TaskBulkFormProps> = ({
                 </div>
                 
                 <div className="grid gap-2">
-                    {/* --- BADGE ADDED HERE --- */}
                     <div className="flex items-center justify-between">
                         <Label htmlFor="primaryValues">Primary Field Values (one per line)</Label>
                         <div className="flex items-center space-x-2">
