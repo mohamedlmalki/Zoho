@@ -1,208 +1,136 @@
-// server/expense-handler.js
-const axios = require('axios');
-const { getValidAccessToken, createJobId } = require('./utils');
+const { makeApiCall, parseError, createJobId } = require('./utils');
 
-const EXPENSE_API_BASE = 'https://www.zohoapis.com/expense/v1';
+let activeJobs = {};
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const setActiveJobs = (jobsObject) => {
+  activeJobs = jobsObject;
+};
 
-// --- 1. Fetch Fields ---
-const handleGetFields = async (socket, data) => {
-    const { profileName, module } = data;
+// Helper for the 10s delay
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const handleGetExpenseFields = async (socket, data) => {
     try {
-        const { activeProfile } = data;
-        const accessToken = await getValidAccessToken(activeProfile, 'expense');
-        const orgId = activeProfile.expense?.orgId;
-
-        if (!orgId) {
-            throw new Error('Expense Organization ID is missing in profile settings.');
-        }
+        const { activeProfile, moduleName } = data;
         
-        // Exact logic from server.js API 1
-        const url = `${EXPENSE_API_BASE}/settings/fields?entity=${module}`;
-        const response = await axios.get(url, {
-            headers: { 
-                'Authorization': `Zoho-oauthtoken ${accessToken}`,
-                'X-com-zoho-expense-organizationid': orgId
+        if (!activeProfile || !activeProfile.expense?.orgId) {
+            throw new Error('Expense profile or Org ID not configured.');
+        }
+
+        // Corresponds to your server.js: /api/get-fields
+        const url = `/settings/fields?entity=${moduleName}`;
+        const response = await makeApiCall('get', url, null, activeProfile, 'expense');
+        
+        // Zoho Expense usually returns { fields: [...] } or { data: [...] }
+        const fields = response.data.fields || response.data.data || [];
+
+        socket.emit('expenseFieldsResult', { success: true, fields: fields });
+
+    } catch (error) {
+        const { message } = parseError(error);
+        socket.emit('expenseFieldsResult', { success: false, error: message });
+    }
+};
+
+const handleCreateExpenseRecord = async (socket, data) => {
+    const { activeProfile, moduleName, formData, waitForLog } = data;
+
+    try {
+        if (!activeProfile || !activeProfile.expense?.orgId) {
+            throw new Error('Expense profile or Org ID not configured.');
+        }
+
+        // 1. CREATE RECORD
+        const createUrl = `/${moduleName}`;
+        // Zoho Expense expects JSON body directly
+        const createResponse = await makeApiCall('post', createUrl, formData, activeProfile, 'expense');
+        
+        const resData = createResponse.data;
+        let recordId = null;
+
+        // Try to find ID in response (logic adapted from your server.js)
+        const keys = Object.keys(resData);
+        keys.forEach(k => {
+            if (resData[k] && resData[k].module_record_id) recordId = resData[k].module_record_id;
+            else if (resData[k] && resData[k].custom_module_id) recordId = resData[k].custom_module_id;
+            else if (resData[k] && resData[k].id) recordId = resData[k].id;
+        });
+
+        // If we don't need to wait, just return success
+        if (!waitForLog) {
+            socket.emit('expenseCreateResult', { 
+                success: true, 
+                recordId: recordId || 'Unknown', 
+                data: resData,
+                logFound: false 
+            });
+            return;
+        }
+
+        if (!recordId) {
+            throw new Error("Record created, but ID could not be parsed from response.");
+        }
+
+        // Notify client that we are waiting
+        socket.emit('expenseLogStatus', { status: 'waiting', message: 'Record created. Waiting 10s to inspect logs...' });
+
+        // 2. WAIT
+        await wait(10000);
+
+        // 3. INSPECT
+        const detailUrl = `/${moduleName}/${recordId}`;
+        const detailRes = await makeApiCall('get', detailUrl, null, activeProfile, 'expense');
+        const body = detailRes.data;
+
+        let recordData = null;
+        // Find the main record object
+        Object.keys(body).forEach(k => {
+            if (typeof body[k] === 'object' && body[k].module_fields) {
+                recordData = body[k];
             }
         });
 
-        // Exact parsing from server.js
-        const fields = response.data.fields || response.data.data || [];
-        
-        socket.emit('expenseFieldsLoaded', { success: true, fields });
-    } catch (error) {
-        console.error('Error fetching expense fields:', error.message);
-        // Handle 401 specifically to give a better error message
-        if (error.response && error.response.status === 401) {
-            socket.emit('expenseFieldsLoaded', { 
-                success: false, 
-                error: "401 Unauthorized. Please restart your server, then Edit Profile > Generate Token again." 
+        if (!recordData) {
+             socket.emit('expenseCreateResult', { 
+                success: true, 
+                recordId, 
+                logFound: false, 
+                debugMessage: "Could not find 'module_fields' in GET response." 
+            });
+            return;
+        }
+
+        // Find 'cf_api_log'
+        const fields = recordData.module_fields || [];
+        const logField = fields.find(f => f.api_name === "cf_api_log");
+        const logValue = logField ? logField.value : null;
+
+        if (logValue && logValue.includes("API LOG")) {
+             socket.emit('expenseCreateResult', { 
+                success: true, 
+                recordId, 
+                logFound: true, 
+                logMessage: logValue,
+                fullRecord: recordData
             });
         } else {
-            socket.emit('expenseFieldsLoaded', { success: false, error: error.message });
-        }
-    }
-};
-
-// --- 2. Bulk Process (Create & Check Log) ---
-const handleStartBulkExpense = async (socket, data) => {
-    const { 
-        activeProfile, 
-        moduleName, 
-        bulkField,       
-        bulkValues,      
-        defaultData,     
-        delay = 1 
-    } = data;
-
-    const valuesArray = bulkValues.split('\n').filter(v => v.trim());
-    const totalToProcess = valuesArray.length;
-    
-    // We assume the delay from the form is the "Wait time to check log" (e.g. 10s)
-    const waitTime = (delay * 1000) || 10000; 
-
-    // Emit initial status
-    socket.emit('expenseResult', {
-        profileName: activeProfile.profileName,
-        rowNumber: 0,
-        primaryValue: 'START',
-        success: true,
-        message: 'Job Started'
-    });
-
-    for (let i = 0; i < totalToProcess; i++) {
-        const primaryVal = valuesArray[i].trim();
-        
-        try {
-            const accessToken = await getValidAccessToken(activeProfile, 'expense');
-            const orgId = activeProfile.expense?.orgId;
-            
-            const headers = { 
-                'Authorization': `Zoho-oauthtoken ${accessToken}`,
-                'X-com-zoho-expense-organizationid': orgId
-            };
-
-            // 1. Construct Payload
-            const payload = {
-                ...defaultData,
-                [bulkField]: primaryVal
-            };
-
-            // 2. CREATE RECORD
-            const url = `${EXPENSE_API_BASE}/${moduleName}`;
-            const response = await axios.post(url, payload, { headers });
-            const resData = response.data;
-
-            // 3. PARSE ID (Logic from server.js)
-            let recordId = null;
-            const keys = Object.keys(resData);
-            keys.forEach(k => {
-                if (resData[k] && resData[k].module_record_id) recordId = resData[k].module_record_id;
-                else if (resData[k] && resData[k].custom_module_id) recordId = resData[k].custom_module_id;
-                else if (resData[k] && resData[k].id) recordId = resData[k].id;
-            });
-
-            if (!recordId) {
-                throw new Error("Created, but could not parse Record ID from response.");
-            }
-
-            // Emit "Created" status (Yellow/Pending)
-            socket.emit('expenseResult', {
-                profileName: activeProfile.profileName,
-                rowNumber: i + 1,
-                primaryValue: primaryVal,
-                success: true,
-                message: 'Created. Waiting for log...',
-                details: `ID: ${recordId}. Checking in ${delay}s...`,
-                recordId: recordId
-            });
-
-            // 4. WAIT (Sleep)
-            await sleep(waitTime);
-
-            // 5. INSPECT (Fetch & Check Log)
-            try {
-                const detailUrl = `${EXPENSE_API_BASE}/${moduleName}/${recordId}`;
-                const detailRes = await axios.get(detailUrl, { headers });
-                const body = detailRes.data;
-
-                // LOGIC FROM SERVER.JS
-                let recordData = null;
-                Object.keys(body).forEach(k => {
-                    if (typeof body[k] === 'object' && body[k].module_fields) {
-                        recordData = body[k];
-                    }
-                });
-
-                if (!recordData) {
-                    throw new Error("Could not find module_fields in verification response");
-                }
-
-                const fields = recordData.module_fields || [];
-                const logField = fields.find(f => f.api_name === "cf_api_log");
-                const logValue = logField ? logField.value : null;
-
-                if (logValue && logValue.includes("API LOG")) {
-                    // SUCCESS: Log Found!
-                    socket.emit('expenseResult', {
-                        profileName: activeProfile.profileName,
-                        rowNumber: i + 1,
-                        primaryValue: primaryVal,
-                        success: true,
-                        message: 'Success (Log Verified)',
-                        details: logValue,
-                        recordId: recordId,
-                        fullResponse: body
-                    });
-                } else {
-                    // WARNING: Log Missing
-                    socket.emit('expenseResult', {
-                        profileName: activeProfile.profileName,
-                        rowNumber: i + 1,
-                        primaryValue: primaryVal,
-                        success: false, // Mark as red if log missing
-                        message: 'Log Missing',
-                        details: `Field value: ${logValue || 'Empty'}`,
-                        recordId: recordId,
-                        fullResponse: body
-                    });
-                }
-
-            } catch (inspectError) {
-                socket.emit('expenseResult', {
-                    profileName: activeProfile.profileName,
-                    rowNumber: i + 1,
-                    primaryValue: primaryVal,
-                    success: false,
-                    message: 'Verification Failed',
-                    details: inspectError.message,
-                    recordId: recordId
-                });
-            }
-
-        } catch (error) {
-            const errorMsg = error.response?.data?.message || error.message;
-            socket.emit('expenseResult', {
-                profileName: activeProfile.profileName,
-                rowNumber: i + 1,
-                primaryValue: primaryVal,
-                success: false,
-                message: 'Creation Failed',
-                details: errorMsg,
-                fullResponse: error.response?.data
+             socket.emit('expenseCreateResult', { 
+                success: true, 
+                recordId, 
+                logFound: false, 
+                debugMessage: `Field 'cf_api_log' found but empty or missing keyword. Value: '${logValue}'`,
+                fullRecord: recordData
             });
         }
-    }
 
-    socket.emit('bulkComplete', { 
-        profileName: activeProfile.profileName, 
-        jobType: 'expense' 
-    });
+    } catch (error) {
+        const { message, fullResponse } = parseError(error);
+        socket.emit('expenseCreateResult', { success: false, error: message, fullResponse });
+    }
 };
 
 module.exports = {
-    handleGetFields,
-    handleStartBulkExpense,
-    setActiveJobs: (jobs) => { }
+    setActiveJobs,
+    handleGetExpenseFields,
+    handleCreateExpenseRecord
 };

@@ -112,11 +112,16 @@ const handleStartBulkInsertRecords = async (socket, data) => {
         selectedProfileName, 
         activeProfile,
         formLinkName,
-        primaryFieldLabelName 
+        primaryFieldLabelName,
+        stopAfterFailures
     } = data;
     
     const jobId = createJobId(socket.id, selectedProfileName, 'people');
-    activeJobs[jobId] = { status: 'running' };
+    activeJobs[jobId] = { 
+        status: 'running',
+        consecutiveFailures: 0, // <--- Init counter
+        stopAfterFailures: Number(stopAfterFailures) || 0 // <--- Store threshold
+    };
 
     try {
         if (!activeProfile || !activeProfile.people) {
@@ -130,6 +135,27 @@ const handleStartBulkInsertRecords = async (socket, data) => {
 
         for (let i = 0; i < primaryFieldValues.length; i++) {
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+            
+            // --- AUTO-PAUSE CHECK ---
+            if (activeJobs[jobId].stopAfterFailures > 0 && 
+                activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
+                 
+                 // Only emit if not ALREADY paused
+                 if (activeJobs[jobId].status !== 'paused') {
+                     activeJobs[jobId].status = 'paused';
+                     socket.emit('jobPaused', { 
+                        profileName: selectedProfileName, 
+                        reason: `Paused automatically after ${activeJobs[jobId].consecutiveFailures} consecutive failures.` 
+                     });
+                 }
+                 
+                 // Stay in loop but paused, waiting for user resume
+                 while (activeJobs[jobId]?.status === 'paused') {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                 }
+            }
+            // ------------------------
+
             while (activeJobs[jobId]?.status === 'paused') {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -159,6 +185,9 @@ const handleStartBulkInsertRecords = async (socket, data) => {
                 const response = await makeApiCall('post', url, params, activeProfile, 'people');
 
                 if (response.data?.response?.status === 0) {
+                     // Reset counter on success
+                     if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures = 0;
+
                      socket.emit('peopleResult', { 
                         email: primaryValue, // Using 'email' key for consistency
                         success: true,
@@ -172,6 +201,9 @@ const handleStartBulkInsertRecords = async (socket, data) => {
                 }
 
             } catch (error) {
+                // Increment counter on failure
+                if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures++;
+
                 // Handle errors for a single record
                 const { message, fullResponse } = parseError(error);
                 const detailedError = fullResponse?.response?.errors?.error?.message || message;
@@ -207,5 +239,5 @@ module.exports = {
     handleGetForms,
     handleGetFormComponents,
     handleInsertRecord,
-    handleStartBulkInsertRecords, // --- ADDED ---
+    handleStartBulkInsertRecords, 
 };
