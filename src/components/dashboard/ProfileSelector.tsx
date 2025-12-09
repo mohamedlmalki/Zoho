@@ -1,10 +1,10 @@
-// --- FILE: src/components/dashboard/ProfileSelector.tsx (FIXED) ---
+// --- FILE: src/components/dashboard/ProfileSelector.tsx ---
 import React, { useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { User, Building, AlertCircle, CheckCircle, Loader, RefreshCw, Activity, Edit, Trash2 } from 'lucide-react';
+import { User, Building, AlertCircle, CheckCircle, Loader, RefreshCw, Activity, Edit, Trash2, CheckCircle2, StopCircle, PauseCircle, XCircle } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { Profile, Jobs as TicketJobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App'; 
 import {
@@ -26,9 +26,7 @@ type ApiStatus = {
 };
 
 type AllJobs = TicketJobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs;
-
-// --- FIX: Added 'expense' to ServiceType ---
-type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense';
+type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting';
 
 interface ProfileSelectorProps {
   profiles: Profile[];
@@ -45,7 +43,7 @@ interface ProfileSelectorProps {
 }
 
 export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
-  profiles = [], // Default to empty array to prevent crash
+  profiles,
   selectedProfile,
   jobs,
   onProfileChange,
@@ -67,9 +65,8 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
     }
   }, [selectedProfile?.profileName, socket?.connected, service, socket]);
 
-  // --- FILTERING LOGIC ---
   const filteredProfiles = useMemo(() => {
-    if (!service) return profiles; 
+    if (!service) return profiles;
     return profiles.filter(p => {
       if (service === 'desk') return p.desk && p.desk.orgId;
       if (service === 'inventory') return p.inventory && p.inventory.orgId;
@@ -79,10 +76,7 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
       if (service === 'creator') return p.creator && p.creator.appName && p.creator.ownerName;
       if (service === 'projects') return p.projects && p.projects.portalId;
       if (service === 'meeting') return p.meeting && p.meeting.zsoid;
-      // --- ADDED EXPENSE FILTER ---
-      if (service === 'expense') return p.expense && p.expense.orgId; 
-      // --- END ADDED ---
-      return true; // Default show all if service not matched (or for 'desk' fallback)
+      return true;
     });
   }, [profiles, service]);
 
@@ -155,17 +149,32 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
               disabled={filteredProfiles.length === 0}
             >
               <SelectTrigger className="h-12 bg-muted/50 border-border hover:bg-muted transition-colors flex-1">
-                <SelectValue placeholder={filteredProfiles.length === 0 ? "No profiles found" : "Select a profile..."} />
+                <SelectValue placeholder="Select a profile..." />
               </SelectTrigger>
               <SelectContent className="bg-card border-border shadow-large">
                 {filteredProfiles.length === 0 && (
                   <div className="p-2 text-sm text-muted-foreground text-center">
-                    No profiles found for {service}.
+                    No profiles found for this service.
                   </div>
                 )}
                 {filteredProfiles.map((profile) => {
-                  const job = (jobs as any)[profile.profileName]; 
-                  const isJobActive = job && job.isProcessing;
+                  const job = (jobs as AllJobs)[profile.profileName];
+                  const total = getTotalToProcess(job);
+                  const current = job?.results?.length || 0;
+                  // --- ADDED: Calculate Failed Count ---
+                  const failedCount = job?.results?.filter((r: any) => !r.success).length || 0;
+                  // -------------------------------------
+
+                  let status: 'processing' | 'paused' | 'finished' | 'ended' | null = null;
+                  
+                  if (job) {
+                    if (job.isProcessing) {
+                       status = job.isPaused ? 'paused' : 'processing';
+                    } else if (job.isComplete) {
+                       status = (current >= total && total > 0) ? 'finished' : 'ended';
+                    }
+                  }
+
                   return (
                     <SelectItem 
                       key={profile.profileName} 
@@ -177,12 +186,41 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
                           <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           <span className="font-medium truncate">{profile.profileName}</span>
                         </div>
-                        {isJobActive && (
-                          <Badge variant="outline" className="font-mono text-xs flex-shrink-0">
-                            <Activity className="h-3 w-3 mr-1.5 animate-pulse text-primary"/>
-                            {job.results.length}/{getTotalToProcess(job)} {job.isPaused ? 'paused' : 'processing'}
-                          </Badge>
-                        )}
+                        
+                        <div className="flex items-center space-x-2">
+                            {/* --- ADDED: Failed Count Badge --- */}
+                            {failedCount > 0 && (
+                                <Badge 
+                                    variant="destructive" 
+                                    className="font-mono text-xs flex-shrink-0 gap-1 border-red-600 bg-red-100 text-red-700 hover:bg-red-100"
+                                >
+                                    <XCircle className="h-3 w-3" />
+                                    <span>{failedCount} Fail</span>
+                                </Badge>
+                            )}
+                            {/* --------------------------------- */}
+
+                            {status && (
+                            <Badge 
+                                variant="outline" 
+                                className={`font-mono text-xs flex-shrink-0 gap-1 ${
+                                    status === 'processing' ? 'border-primary text-primary' :
+                                    status === 'paused' ? 'border-yellow-500 text-yellow-500' :
+                                    status === 'finished' ? 'border-green-500 text-green-500' :
+                                    'border-red-500 text-red-500' 
+                                }`}
+                            >
+                                {status === 'processing' && <Activity className="h-3 w-3 animate-pulse"/>}
+                                {status === 'paused' && <PauseCircle className="h-3 w-3"/>}
+                                {status === 'finished' && <CheckCircle2 className="h-3 w-3"/>}
+                                {status === 'ended' && <StopCircle className="h-3 w-3"/>}
+                                
+                                <span>{current}/{total}</span>
+                                <span className="capitalize hidden sm:inline">{status}</span>
+                            </Badge>
+                            )}
+                        </div>
+
                       </div>
                     </SelectItem>
                   )
@@ -194,7 +232,7 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
           {selectedProfile && (
             <div className="p-4 bg-gradient-muted rounded-lg border border-border">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-foreground">Status</span>
+                <span className="text-sm font-medium text-foreground"></span>
                
                 <div className="flex items-center space-x-2">
                   <Button variant={badgeProps.variant} size="sm" onClick={onShowStatus}>
@@ -214,40 +252,31 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
               </div>
 
                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm pt-2">
-                  {/* --- API STATUS INFO --- */}
                   {apiStatus && apiStatus.status === 'success' && apiStatus.fullResponse?.agentInfo && (
                       <>
-                          <span className="text-muted-foreground">Name:</span>
-                          <span className="font-medium text-foreground text-right truncate">
-                              {apiStatus.fullResponse.agentInfo.firstName} {apiStatus.fullResponse.agentInfo.lastName}
-                          </span>
+                          <span className="text-muted-foreground">Agent Name:</span>
+                          <span className="font-medium text-foreground text-right truncate">{apiStatus.fullResponse.agentInfo.firstName} {apiStatus.fullResponse.agentInfo.lastName}</span>
                          
-                          {apiStatus.fullResponse.orgName && (
-                              <>
-                                <span className="text-muted-foreground">Organization:</span>
-                                <span className="font-medium text-foreground text-right truncate">{apiStatus.fullResponse.orgName}</span>
-                              </>
-                          )}
+                          <span className="text-muted-foreground">Organization:</span>
+                          <span className="font-medium text-foreground text-right truncate">{apiStatus.fullResponse.orgName}</span>
                       </>
                   )}
-
-                  {/* --- PROFILE STATIC INFO --- */}
-                  {service === 'desk' && selectedProfile.desk?.orgId && (
+                  {selectedProfile.desk?.orgId && (
                     <>
                       <span className="text-muted-foreground">Desk Org ID:</span>
                       <span className="font-mono text-foreground text-right truncate">{selectedProfile.desk.orgId}</span>
                     </>
                   )}
-                  {service === 'inventory' && selectedProfile.inventory?.orgId && (
+                   {selectedProfile.inventory?.orgId && (
                     <>
                       <span className="text-muted-foreground">Inventory Org ID:</span>
                       <span className="font-mono text-foreground text-right truncate">{selectedProfile.inventory.orgId}</span>
                     </>
                   )}
-                   {service === 'expense' && selectedProfile.expense?.orgId && (
+                   {selectedProfile.meeting?.zsoid && (
                     <>
-                      <span className="text-muted-foreground">Expense Org ID:</span>
-                      <span className="font-mono text-foreground text-right truncate">{selectedProfile.expense.orgId}</span>
+                      <span className="text-muted-foreground">Meeting Org ID:</span>
+                      <span className="font-mono text-foreground text-right truncate">{selectedProfile.meeting.zsoid}</span>
                     </>
                   )}
               </div>

@@ -9,7 +9,7 @@ import { QntrlJobs, QntrlFormData } from '@/App';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Loader2, Play, Pause, Square, Clock, CheckCircle, XCircle,
-  ImagePlus, Eye, Hash, AlertTriangle 
+  ImagePlus, Eye, Hash // <-- Added Hash icon
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge'; // <-- Added Badge
 
 import {
   Dialog,
@@ -268,7 +268,7 @@ export const QntrlForm: React.FC<QntrlFormProps> = ({ profileName, socket, job, 
 
   const handleStart = () => {
     if (!socket) return;
-    const { selectedFormId, bulkPrimaryField, bulkPrimaryValues, bulkDelay, stopAfterFailures } = formData;
+    const { selectedFormId, bulkPrimaryField, bulkPrimaryValues, bulkDelay } = formData;
 
     if (!selectedFormId || !bulkPrimaryField || !bulkPrimaryValues) {
         toast({ title: "Error", description: "Please select a form, a primary field, and provide values.", variant: "destructive" });
@@ -286,7 +286,6 @@ export const QntrlForm: React.FC<QntrlFormProps> = ({ profileName, socket, job, 
       formData: {
         ...formData,
         bulkDelay: Number(bulkDelay) || 1,
-        stopAfterFailures: Number(stopAfterFailures) || 0
       },
       totalToProcess: values.length,
     });
@@ -380,40 +379,18 @@ export const QntrlForm: React.FC<QntrlFormProps> = ({ profileName, socket, job, 
                   </SelectContent>
                 </Select>
               </div>
-              
-              {/* --- MODIFIED: Added Auto-Pause to Delay Column --- */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="delay">Delay (seconds)</Label>
-                  <Input
-                    id="delay"
-                    type="number"
-                    min="0.5"
-                    step="0.1"
-                    value={formData.bulkDelay}
-                    onChange={(e) => handleInputChange('bulkDelay', Number(e.target.value))}
-                    disabled={isProcessing}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="autoPause" className="flex items-center space-x-2 text-amber-600">
-                     <AlertTriangle className="h-4 w-4" />
-                     <span>Auto-Pause</span>
-                  </Label>
-                  <Input
-                    id="autoPause"
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="0 (Off)"
-                    value={formData.stopAfterFailures === 0 ? '' : formData.stopAfterFailures}
-                    onChange={(e) => handleInputChange('stopAfterFailures', Number(e.target.value))}
-                    disabled={isProcessing}
-                    className="placeholder:text-muted-foreground/50"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="delay">Delay (in seconds)</Label>
+                <Input
+                  id="delay"
+                  type="number"
+                  min="0.5"
+                  step="0.1"
+                  value={formData.bulkDelay}
+                  onChange={(e) => handleInputChange('bulkDelay', Number(e.target.value))}
+                  disabled={isProcessing}
+                />
               </div>
-              {/* ----------------------------------------------- */}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,14 +1,12 @@
-// --- FILE: src/components/dashboard/DashboardLayout.tsx (MODIFIED) ---
+// --- FILE: src/components/dashboard/DashboardLayout.tsx ---
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-// --- FIXED IMPORTS (Changed ../../ to ../) ---
-import { Progress } from '../ui/progress';
-import { Button } from '../ui/button';
-import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video, Receipt } from 'lucide-react';
-// --- END ---
-import { cn } from '../../lib/utils';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'; // Added hooks
+import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video, Activity } from 'lucide-react'; // Added Activity icon
+import { cn } from '@/lib/utils';
 import { ProfileSelector } from './ProfileSelector';
-import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '../../App';
+import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App';
 import { Socket } from 'socket.io-client';
 
 type ApiStatus = {
@@ -18,7 +16,7 @@ type ApiStatus = {
 };
 
 type AllJobs = Jobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs;
-type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense';
+type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting';
 
 
 interface DashboardLayoutProps {
@@ -33,9 +31,9 @@ interface DashboardLayoutProps {
   selectedProfile: Profile | null;
   jobs: AllJobs;
   onProfileChange: (profileName: string) => void;
-  apiStatus?: ApiStatus;
-  onShowStatus?: () => void;
-  onManualVerify?: () => void;
+  apiStatus: ApiStatus;
+  onShowStatus: () => void;
+  onManualVerify: () => void;
   socket: Socket | null;
   onEditProfile: (profile: Profile) => void;
   onDeleteProfile: (profileName: string) => void;
@@ -69,10 +67,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   service, 
   ...profileSelectorProps 
 }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const progressPercent = stats.totalToProcess > 0 ? (stats.totalTickets / stats.totalToProcess) * 100 : 0;
+  
+  // Check if we are currently on the stats page to highlight the button
+  const isStatsPage = location.pathname === '/live-stats';
 
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
+    <div className="grid min-h-screen w-full md:grid-cols-[280px_1fr] lg:grid-cols-[340px_1fr]">
       <div className="hidden border-r bg-card md:block">
         <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
@@ -90,7 +93,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
           <div className="flex-1 overflow-auto py-2">
             <nav className="grid items-start px-2 text-sm font-medium lg:px-4 space-y-4">
-              {/* --- Zoho Desk --- */}
+              
               <div>
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Desk</h3>
                 <SidebarNavLink to="/">
@@ -102,10 +105,68 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   Single Ticket
                 </SidebarNavLink>
               </div>
-
-              {/* --- Zoho Inventory --- */}
+              
+			  <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Creator</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    no from name - subject and content
+                </p>
+                <SidebarNavLink to="/creator-forms">
+                  <AppWindow className="h-4 w-4" />
+                  Forms
+                </SidebarNavLink>
+              </div>
+             
               <div>
                 <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Projects</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    from name - subject and content (html image only)
+                </p>
+                <SidebarNavLink to="/projects-tasks">
+                  <FolderKanban className="h-4 w-4" />
+                  Task Management
+                </SidebarNavLink>
+              </div>
+			  
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Qntrl</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    no from name - subject and content
+                </p>
+                <SidebarNavLink to="/qntrl-forms">
+                  <Network className="h-4 w-4" />
+                  Forms
+                </SidebarNavLink>
+              </div>
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho People</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    no from name - subject only - fast
+                </p>
+                <SidebarNavLink to="/people-forms">
+                  <FileText className="h-4 w-4" />
+                  Forms
+                </SidebarNavLink>
+              </div>
+
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Meeting</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    from name - subject only
+                </p>
+                <SidebarNavLink to="/bulk-webinar-registration">
+                  <Video className="h-4 w-4" />
+                  Webinar Registration
+                </SidebarNavLink>
+              </div>
+              <SidebarDivider />
+             
+               <div>
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Inventory</h3>
                 <SidebarNavLink to="/bulk-invoices">
                   <Package className="h-4 w-4" />
@@ -120,9 +181,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   Email Statics
                 </SidebarNavLink>
               </div>
-
-              {/* --- Zoho Catalyst --- */}
-              <div>
+			 
+			 <div>
                 <SidebarDivider />
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Catalyst</h3>
                 <SidebarNavLink to="/bulk-signup">
@@ -142,86 +202,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   Manage Users
                 </SidebarNavLink>
               </div>
-
-              {/* --- Zoho Qntrl --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Qntrl</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    no from name - subject and content
-                </p>
-                <SidebarNavLink to="/qntrl-forms">
-                  <Network className="h-4 w-4" />
-                  Forms
-                </SidebarNavLink>
-              </div>
-
-              {/* --- Zoho People --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho People</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    no from name - subject
-                </p>
-                <SidebarNavLink to="/people-forms">
-                  <FileText className="h-4 w-4" />
-                  Forms
-                </SidebarNavLink>
-              </div>
-
-              {/* --- Zoho Creator --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Creator</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    no from name - subject and content
-                </p>
-                <SidebarNavLink to="/creator-forms">
-                  <AppWindow className="h-4 w-4" />
-                  Forms
-                </SidebarNavLink>
-              </div>
-              
-              {/* --- Zoho Projects --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Projects</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    from name - subject can content (html image only)
-                </p>
-                <SidebarNavLink to="/projects-tasks">
-                  <FolderKanban className="h-4 w-4" />
-                  Task Management
-                </SidebarNavLink>
-              </div>
-
-              {/* --- Zoho Meeting --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Meeting</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    from name - subject can be add
-                </p>
-                <SidebarNavLink to="/bulk-webinar-registration">
-                  <Video className="h-4 w-4" />
-                  Webinar Registration
-                </SidebarNavLink>
-              </div>
-
-              {/* --- Zoho Expense (ADDED) --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Expense</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    check connection status
-                </p>
-                <SidebarNavLink to="/expense-status">
-                  <Receipt className="h-4 w-4" />
-                  Expense Status
-                </SidebarNavLink>
-              </div>
-              {/* --- END ADDED --- */}
-              
+			 
             </nav>
           </div>
           <div className="mt-auto p-4 border-t">
@@ -232,11 +213,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
         </div>
       </div>
-      
+     
       <div className="flex flex-col">
-        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30">
-          <div className="w-full flex-1">
-          </div>
+        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30 justify-between">
+          <div className="flex-1"></div>
+          
+          {/* --- NEW BUTTON IN NAVBAR --- */}
+          <Button 
+            variant={isStatsPage ? "default" : "outline"} 
+            size="sm" 
+            className="hidden md:flex items-center gap-2"
+            onClick={() => navigate('/live-stats')}
+          >
+            <Activity className="h-4 w-4" />
+            Live Statistics
+          </Button>
+          {/* --------------------------- */}
+
           {stats.isProcessing && stats.totalToProcess > 0 && (
             <div className="absolute bottom-0 left-0 w-full">
               <Progress value={progressPercent} className="h-1 w-full rounded-none bg-muted/50" />
