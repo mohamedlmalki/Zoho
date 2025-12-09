@@ -1,4 +1,4 @@
-// --- FILE: server/index.js (MODIFIED) ---
+// --- FILE: server/index.js ---
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -13,6 +13,7 @@ const peopleHandler = require('./people-handler');
 const creatorHandler = require('./creator-handler');
 const projectsHandler = require('./projects-handler');
 const meetingHandler = require('./meeting-handler');
+const expenseHandler = require('./expense-handler'); // <--- ADDED
 require('dotenv').config();
 
 const app = express();
@@ -32,6 +33,7 @@ peopleHandler.setActiveJobs(activeJobs);
 creatorHandler.setActiveJobs(activeJobs);
 projectsHandler.setActiveJobs(activeJobs);
 meetingHandler.setActiveJobs(activeJobs);
+expenseHandler.setActiveJobs(activeJobs); // <--- ADDED
 
 
 const authStates = {};
@@ -88,7 +90,8 @@ app.post('/api/zoho/auth', (req, res) => {
         'ZohoMeeting.webinar.UPDATE',
         'ZohoMeeting.webinar.CREATE',
         'ZohoMeeting.user.READ',
-		
+        'ZohoExpense.fullaccess.ALL', // <--- ADDED
+
         'WorkDrive.workspace.ALL',
         'WorkDrive.files.ALL',
         'ZohoPC.files.ALL',
@@ -110,6 +113,10 @@ app.post('/api/zoho/auth', (req, res) => {
     
     const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=${combinedScopes}&client_id=${clientId}&response_type=code&access_type=offline&redirect_uri=${REDIRECT_URI}&prompt=consent&state=${state}`;
     
+	console.log("\n--- GENERATING AUTH URL ---");
+    console.log(authUrl); // <--- LOG ADDED HERE
+    console.log("---------------------------\n");
+	
     res.json({ authUrl });
 });
 
@@ -185,7 +192,6 @@ app.post('/api/catalyst/single', async (req, res) => {
     }
 });
 
-// --- NEW REST ENDPOINT FOR PROJECTS ---
 app.post('/api/projects/tasks/single', async (req, res) => {
     try {
         const { formData, selectedProfileName } = req.body;
@@ -193,18 +199,17 @@ app.post('/api/projects/tasks/single', async (req, res) => {
         const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
 
         const result = await projectsHandler.handleCreateSingleTask({
-            ...formData, // contains projectId, tasklistId, taskNameS (as taskName), taskDescription
-            taskName: formData.taskNames, // handle single name
+            ...formData, 
+            taskName: formData.taskNames, 
             portalId: activeProfile?.projects?.portalId,
             selectedProfileName,
-            bulkDefaultData: formData.bulkDefaultData || {} // <-- Pass dynamic fields
+            bulkDefaultData: formData.bulkDefaultData || {} 
         });
         res.json(result);
     } catch (error) {
         res.status(500).json({ success: false, error: 'An unexpected server error occurred during single task creation.' });
     }
 });
-// --- END NEW REST ENDPOINT ---
 
 // --- PROFILE MANAGEMENT API ---
 app.get('/api/profiles', (req, res) => {
@@ -365,25 +370,20 @@ io.on('connection', (socket) => {
                     throw new Error('Projects config (portalId) is missing.');
                 }
                 const { portalId } = activeProfile.projects;
-                // Use the portal ID to fetch portal details as a verification step
                 const portalResponse = await makeApiCall('get', `/portal/${portalId}`, null, activeProfile, 'projects');
                 
                 validationData = { 
                     orgName: `Portal: ${portalResponse.data.portal_details.name}`,
                     agentInfo: { 
-                        firstName: `Portal Owner`, // Info is not readily available here, just confirming connection
+                        firstName: `Portal Owner`, 
                         lastName: '' 
                     },
                     portalData: portalResponse.data 
                 };
             }
-            // --- MODIFIED: ZOHO MEETING API STATUS CHECK ---
             else if (service === 'meeting') {
-                // --- FIX: Using the correct endpoint you provided ---
                 const userDetailsResponse = await makeApiCall('get', '/api/v2/user.json', null, activeProfile, 'meeting');
-                
-                // Assuming response structure based on other Zoho APIs and your docs
-                const userData = userDetailsResponse.data; // The root object might be the user
+                const userData = userDetailsResponse.data;
                 validationData = { 
                     orgName: userData.organization?.org_name || 'Zoho Meeting Org',
                     agentInfo: { 
@@ -393,7 +393,18 @@ io.on('connection', (socket) => {
                     userData: userData
                 };
             }
-            // --- END MODIFIED ---
+            else if (service === 'expense') { // <--- ADDED: Expense Check
+                 // Simple check: fetch settings/currencies or similar to verify access
+                 // We don't have a specific ID in profile for expense usually (depends on org)
+                 // Just testing token validity by hitting a safe endpoint
+                 const expenseCheckUrl = `/settings/currencies`;
+                 const expenseResponse = await makeApiCall('get', expenseCheckUrl, null, activeProfile, 'expense');
+                 validationData = {
+                     orgName: 'Zoho Expense',
+                     agentInfo: { firstName: 'Expense', lastName: 'User' },
+                     data: expenseResponse.data
+                 }
+            }
 
             socket.emit('apiStatusResult', { 
                 success: true, 
@@ -427,20 +438,17 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // Clear any active jobs associated with this socket
         Object.keys(activeJobs).forEach(jobId => {
             if (jobId.startsWith(socket.id)) delete activeJobs[jobId];
         });
     });
 
-    // --- ADDED: Utility listener for Profile Modal ---
     socket.on('getProjectsPortals', (data) => {
         projectsHandler.handleGetPortals(socket, data);
     });
 
     // --- Service-specific Listeners ---
 
-    // Zoho Desk Listeners
     const deskListeners = {
         'startBulkCreate': deskHandler.handleStartBulkCreate,
         'getEmailFailures': deskHandler.handleGetEmailFailures,
@@ -449,7 +457,6 @@ io.on('connection', (socket) => {
         'getMailReplyAddressDetails': deskHandler.handleGetMailReplyAddressDetails,
         'updateMailReplyAddressDetails': deskHandler.handleUpdateMailReplyAddressDetails,
     };
-
     for (const [event, handler] of Object.entries(deskListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
@@ -458,7 +465,6 @@ io.on('connection', (socket) => {
         });
     }
 
-    // Zoho Inventory Listeners
     const inventoryListeners = {
         'startBulkInvoice': inventoryHandler.handleStartBulkInvoice,
         'getOrgDetails': inventoryHandler.handleGetOrgDetails,
@@ -466,7 +472,6 @@ io.on('connection', (socket) => {
         'getInvoices': inventoryHandler.handleGetInvoices,
         'deleteInvoices': inventoryHandler.handleDeleteInvoices,
     };
-
     for (const [event, handler] of Object.entries(inventoryListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
@@ -475,7 +480,6 @@ io.on('connection', (socket) => {
         });
     }
     
-    // Zoho Catalyst Listeners
     const catalystListeners = {
         'startBulkSignup': catalystHandler.handleStartBulkSignup,
         'startBulkEmail': catalystHandler.handleStartBulkEmail,
@@ -483,7 +487,6 @@ io.on('connection', (socket) => {
         'deleteUser': catalystHandler.handleDeleteUser,
         'deleteUsers': catalystHandler.handleDeleteUsers,
     };
-
     for (const [event, handler] of Object.entries(catalystListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
@@ -492,14 +495,12 @@ io.on('connection', (socket) => {
         });
     }
 	
-    // Zoho Qntrl Listeners
     const qntrlListeners = {
         'getQntrlForms': qntrlHandler.handleGetForms,
         'getQntrlFormDetails': qntrlHandler.handleGetFormDetails,
         'createQntrlCard': qntrlHandler.handleCreateCard,
         'startBulkCreateCards': qntrlHandler.handleStartBulkCreateCards, 
     };
-
     for (const [event, handler] of Object.entries(qntrlListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
@@ -508,110 +509,81 @@ io.on('connection', (socket) => {
         });
     }
 
-    // Zoho People Listeners
     const peopleListeners = {
         'getPeopleForms': peopleHandler.handleGetForms,
         'getPeopleFormComponents': peopleHandler.handleGetFormComponents,
         'insertPeopleRecord': peopleHandler.handleInsertRecord,
         'startBulkInsertPeopleRecords': peopleHandler.handleStartBulkInsertRecords,
     };
-
     for (const [event, handler]of Object.entries(peopleListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                handler(socket, { ...data, activeProfile });
-            } else {
-                socket.emit('bulkError', { message: 'Active profile not found.' });
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
+            else socket.emit('bulkError', { message: 'Active profile not found.' });
         });
     }
 
-    // Zoho Creator Listeners
     const creatorListeners = {
         'getCreatorForms': creatorHandler.handleGetForms,
         'getCreatorFormComponents': creatorHandler.handleGetFormComponents,
         'insertCreatorRecord': creatorHandler.handleInsertRecord,
         'startBulkInsertCreatorRecords': creatorHandler.handleStartBulkInsertCreatorRecords,
     };
-
     for (const [event, handler] of Object.entries(creatorListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
-                } else {
-                    console.error(`[ERROR] Handler for event '${event}' is not a function.`);
-                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
-                }
-            } else {
-                socket.emit('bulkError', { message: 'Active profile not found.' });
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
+            else socket.emit('bulkError', { message: 'Active profile not found.' });
         });
     }
 
-    // --- MODIFIED: Zoho Projects Listeners ---
     const projectsListeners = {
         'getProjectsPortals': projectsHandler.handleGetPortals, 
         'getProjectsProjects': projectsHandler.handleGetProjects,
-        'getProjectsTaskLists': projectsHandler.handleGetTaskLists, // Matches your handler
+        'getProjectsTaskLists': projectsHandler.handleGetTaskLists, 
         'getProjectsTasks': projectsHandler.handleGetTasks,
         'startBulkCreateTasks': projectsHandler.handleStartBulkCreateTasks,
         'getProjectsTaskLayout': projectsHandler.handleGetTaskLayout,
 		'updateProjectDetails': projectsHandler.handleUpdateProjectDetails,
     };
-    // --- END MODIFICATION ---
-
     for (const [event, handler] of Object.entries(projectsListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                if (typeof handler === 'function') {
-                    // Pass the activeProfile to the handler
-                    handler(socket, { ...data, activeProfile });
-                } else {
-                    console.error(`[ERROR] Handler for event '${event}' is not a function.`);
-                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.'` });
-                }
-            } else {
-                 // Emit error if profile not found, except for portal fetch which uses temp credentials
-                 if(event !== 'getProjectsPortals') {
-                    socket.emit('bulkError', { message: 'Active profile not found.' });
-                 } else {
-                    // For getProjectsPortals, the handler creates its own temp profile
-                    handler(socket, data);
-                 }
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
+            else if(event !== 'getProjectsPortals') socket.emit('bulkError', { message: 'Active profile not found.' });
+            else handler(socket, data);
         });
     }
 
-    // --- ADDED: Zoho Meeting Listeners ---
     const meetingListeners = {
         'fetchWebinars': meetingHandler.handleGetWebinars,
         'startBulkRegistration': meetingHandler.handleStartBulkRegistration,
     };
-
     for (const [event, handler] of Object.entries(meetingListeners)) {
         socket.on(event, (data) => {
             const profiles = readProfiles();
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
-                } else {
-                    console.error(`[ERROR] Handler for event '${event}' is not a function.`);
-                    socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
-                }
-            } else {
-                 socket.emit('bulkError', { message: 'Active profile not found.' });
-            }
+            if (activeProfile) handler(socket, { ...data, activeProfile });
+            else socket.emit('bulkError', { message: 'Active profile not found.' });
         });
     }
-    // --- END ADDED ---
+
+    // --- ADDED: Zoho Expense Listeners ---
+    const expenseListeners = {
+        'getExpenseFields': expenseHandler.handleGetFields,
+        'startBulkExpense': expenseHandler.handleStartBulkExpense,
+    };
+    for (const [event, handler] of Object.entries(expenseListeners)) {
+        socket.on(event, (data) => {
+            const profiles = readProfiles();
+            const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName || p.profileName === data.profileName) : null;
+            if (activeProfile) handler(socket, { ...data, activeProfile });
+            else socket.emit('bulkError', { message: 'Active profile not found.' });
+        });
+    }
 });
 
 

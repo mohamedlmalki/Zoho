@@ -1,4 +1,4 @@
-// --- FILE: src/components/dashboard/ProfileModal.tsx (MODIFIED) ---
+// --- FILE: src/components/dashboard/ProfileModal.tsx ---
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Profile } from '@/App';
 import { useToast } from '@/hooks/use-toast';
-// --- ADDED 'Video' icon ---
-import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video } from 'lucide-react';
+// --- ADDED 'CreditCard' icon ---
+import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video, CreditCard } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { Separator } from '../ui/separator';
 import {
@@ -29,63 +29,37 @@ interface ProfileModalProps {
 
 const SERVER_URL = "http://localhost:3000";
 
-// --- MODIFICATION: Updated interface based on your logs ---
 interface Portal {
   id: string;
   portal_name: string;
-  [key: string]: any; // Other properties
+  [key: string]: any;
 }
-// --- END MODIFICATION ---
 
 const getInitialFormData = (): Profile => ({
   profileName: '',
   clientId: '',
   clientSecret: '',
   refreshToken: '',
-  desk: {
-    orgId: '',
-    defaultDepartmentId: '',
-    fromEmailAddress: '',
-    mailReplyAddressId: '',
-  },
-  inventory: {
-    orgId: '',
-  },
-  catalyst: {
-    projectId: '',
-    fromEmail: '', 
-  },
-  qntrl: {
-    orgId: '',
-  },
-  people: {
-    orgId: '',
-  },
-  creator: {
-    baseUrl: 'www.zohoapis.com', // Default to .com
-    ownerName: '',
-    appName: '',
-  },
-  projects: {
-    portalId: '',
-  },
+  desk: { orgId: '', defaultDepartmentId: '', fromEmailAddress: '', mailReplyAddressId: '' },
+  inventory: { orgId: '' },
+  catalyst: { projectId: '', fromEmail: '' },
+  qntrl: { orgId: '' },
+  people: { orgId: '' },
+  creator: { baseUrl: 'www.zohoapis.com', ownerName: '', appName: '' },
+  projects: { portalId: '' },
+  meeting: { zsoid: '' },
   // --- ADDED ---
-  meeting: {
-    zsoid: '',
-  },
+  expense: { orgId: '', customModuleApiName: '' },
   // --- END ADDED ---
 });
-
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onSave, profile, socket }) => {
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [formData, setFormData] = useState<Profile>(getInitialFormData());
-
   const [isFetchingPortals, setIsFetchingPortals] = useState(false);
   const [portalList, setPortalList] = useState<Portal[]>([]);
   const [isPortalModalOpen, setIsPortalModalOpen] = useState(false);
-
 
   useEffect(() => {
     if (isOpen) {
@@ -100,8 +74,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 people: { ...getInitialFormData().people, ...profile.people },
                 creator: { ...getInitialFormData().creator, ...profile.creator },
                 projects: { ...getInitialFormData().projects, ...profile.projects },
-                // --- ADDED ---
                 meeting: { ...getInitialFormData().meeting, ...profile.meeting },
+                // --- ADDED ---
+                expense: { ...getInitialFormData().expense, ...profile.expense },
                 // --- END ADDED ---
             });
         } else {
@@ -110,52 +85,39 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
     }
   }, [profile, isOpen]);
 
+  // ... (Socket useEffect remains the same) ...
   useEffect(() => {
     if (!socket || !isOpen) return;
-
     const handleTokenReceived = (data: { refreshToken: string }) => {
       setFormData(prev => ({ ...prev, refreshToken: data.refreshToken }));
       setIsGenerating(false);
       toast({ title: "Success!", description: "Refresh token has been populated." });
     };
-
     const handleTokenError = (data: { error: string }) => {
         setIsGenerating(false);
         toast({ title: "Token Generation Error", description: data.error, variant: "destructive" });
     }
-
     const handlePortalsResult = (data: { portals: Portal[] }) => {
         setIsFetchingPortals(false);
         const portals = data.portals;
-
         if (!portals || portals.length === 0) {
             toast({ title: "No Portals Found", description: "No Zoho Projects portals are associated with this account.", variant: "destructive" });
             return;
         }
-
-        // 1. "Smart" Case: Only one portal
         if (portals.length === 1) {
-            // --- MODIFICATION: Use 'id' based on log ---
             const portalId = portals[0].id;
-            setFormData(prev => ({ 
-                ...prev, 
-                projects: { ...prev.projects, portalId } 
-            }));
+            setFormData(prev => ({ ...prev, projects: { ...prev.projects, portalId } }));
             toast({ title: "Success!", description: `Portal ID ${portalId} was auto-filled.` });
             return;
         }
-
-        // 2. "Manual" Case: Multiple portals
         setPortalList(portals);
         setIsPortalModalOpen(true);
         toast({ title: "Multiple Portals Found", description: "Please select your portal from the list." });
     };
-
     const handlePortalsError = (data: { message: string }) => {
         setIsFetchingPortals(false);
         toast({ title: "Error Fetching Portals", description: data.message, variant: "destructive" });
     };
-
 
     socket.on('zoho-refresh-token', handleTokenReceived);
     socket.on('zoho-refresh-token-error', handleTokenError);
@@ -175,9 +137,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // --- MODIFIED ---
-  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting', e: React.ChangeEvent<HTMLInputElement>) => {
-  // --- END MODIFIED ---
+  // --- MODIFIED: Added 'expense' to union type ---
+  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense', e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
         ...prev,
@@ -189,13 +150,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
   };
  
   const handleCreatorSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({
-        ...prev,
-        creator: {
-            ...(prev.creator as object),
-            [name]: value,
-        }
-    }));
+    setFormData(prev => ({ ...prev, creator: { ...(prev.creator as object), [name]: value } }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -203,63 +158,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
     onSave(formData, profile?.profileName);
   };
 
-  const handleGenerateToken = async () => {
-    if (!formData.clientId || !formData.clientSecret) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter a Client ID and Client Secret first.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!socket) {
-        toast({ title: "Error", description: "Not connected to the server.", variant: "destructive" });
-        return;
-    }
-   
+  const handleGenerateToken = async () => { /* ... existing logic ... */ 
+    if (!formData.clientId || !formData.clientSecret) { toast({ title: "Missing Information", description: "Please enter a Client ID and Client Secret first.", variant: "destructive" }); return; }
+    if (!socket) { toast({ title: "Error", description: "Not connected to the server.", variant: "destructive" }); return; }
     setIsGenerating(true);
-
     try {
-      const response = await fetch(`${SERVER_URL}/api/zoho/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            clientId: formData.clientId, 
-            clientSecret: formData.clientSecret,
-            socketId: socket.id 
-        }),
-      });
+      const response = await fetch(`${SERVER_URL}/api/zoho/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: formData.clientId, clientSecret: formData.clientSecret, socketId: socket.id }), });
       if (!response.ok) throw new Error("Failed to get auth URL from server.");
-
       const { authUrl } = await response.json();
       window.open(authUrl, '_blank', 'width=600,height=700');
-
-    } catch (error) {
-      toast({ title: "Error", description: "Could not initiate authorization.", variant: "destructive" });
-      setIsGenerating(false);
-    }
+    } catch (error) { toast({ title: "Error", description: "Could not initiate authorization.", variant: "destructive" }); setIsGenerating(false); }
   };
 
-  const handleFetchPortals = () => {
-    if (!formData.clientId || !formData.clientSecret || !formData.refreshToken) {
-        toast({
-            title: "Missing Credentials",
-            description: "Client ID, Client Secret, and Refresh Token are required to fetch portals.",
-            variant: "destructive",
-        });
-        return;
-    }
-    if (!socket) {
-        toast({ title: "Error", description: "Not connected to the server.", variant: "destructive" });
-        return;
-    }
-
+  const handleFetchPortals = () => { /* ... existing logic ... */ 
+    if (!formData.clientId || !formData.clientSecret || !formData.refreshToken) { toast({ title: "Missing Credentials", description: "Client ID, Client Secret, and Refresh Token are required to fetch portals.", variant: "destructive" }); return; }
+    if (!socket) { toast({ title: "Error", description: "Not connected to the server.", variant: "destructive" }); return; }
     setIsFetchingPortals(true);
-    socket.emit('getProjectsPortals', {
-        clientId: formData.clientId,
-        clientSecret: formData.clientSecret,
-        refreshToken: formData.refreshToken,
-    });
+    socket.emit('getProjectsPortals', { clientId: formData.clientId, clientSecret: formData.clientSecret, refreshToken: formData.refreshToken });
   };
 
   return (
@@ -306,38 +221,31 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
            
             {/* --- COLUMN 1 --- */}
             <div className="space-y-6">
-              {/* --- ZOHO DESK SETTINGS --- */}
+              {/* Desk */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Building className="h-4 w-4 mr-2" />
-                  Zoho Desk Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><Building className="h-4 w-4 mr-2" />Zoho Desk Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="desk_orgId" className="text-right">Org ID</Label>
-                    <Input id="desk_orgId" name="orgId" value={formData.desk?.orgId || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" />
+                        <Label htmlFor="desk_orgId" className="text-right">Org ID</Label>
+                        <Input id="desk_orgId" name="orgId" value={formData.desk?.orgId || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="defaultDepartmentId" className="text-right">Department ID</Label>
-                    <Input id="defaultDepartmentId" name="defaultDepartmentId" value={formData.desk?.defaultDepartmentId || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" />
+                        <Label htmlFor="defaultDepartmentId" className="text-right">Dept ID</Label>
+                        <Input id="defaultDepartmentId" name="defaultDepartmentId" value={formData.desk?.defaultDepartmentId || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="fromEmailAddress" className="text-right">From Email</Label>
-                    <Input id="fromEmailAddress" name="fromEmailAddress" value={formData.desk?.fromEmailAddress || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" placeholder="e.g., support@yourco.zohodesk.com" />
+                        <Label htmlFor="fromEmailAddress" className="text-right">From Email</Label>
+                        <Input id="fromEmailAddress" name="fromEmailAddress" value={formData.desk?.fromEmailAddress || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" placeholder="e.g., support@yourco.zohodesk.com" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="mailReplyAddressId" className="text-right">Mail Reply ID</Label>
-                    <Input id="mailReplyAddressId" name="mailReplyAddressId" value={formData.desk?.mailReplyAddressId || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" placeholder="(Optional)" />
+                        <Label htmlFor="mailReplyAddressId" className="text-right">Reply ID</Label>
+                        <Input id="mailReplyAddressId" name="mailReplyAddressId" value={formData.desk?.mailReplyAddressId || ''} onChange={(e) => handleNestedChange('desk', e)} className="col-span-3" placeholder="(Optional)" />
                     </div>
                 </div>
               </div>
-             
-              {/* --- ZOHO CATALYST SETTINGS --- */}
+              {/* Catalyst */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Cloud className="h-4 w-4 mr-2" />
-                  Zoho Catalyst Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><Cloud className="h-4 w-4 mr-2" />Zoho Catalyst Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="catalyst_projectId" className="text-right">Project ID</Label>
@@ -345,50 +253,37 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="catalyst_fromEmail" className="text-right">From Email</Label>
-                      <Input id="catalyst_fromEmail" name="fromEmail" value={formData.catalyst?.fromEmail || ''} onChange={(e) => handleNestedChange('catalyst', e)} className="col-span-3" placeholder="(Optional) Verified sender" />
+                      <Input id="catalyst_fromEmail" name="fromEmail" value={formData.catalyst?.fromEmail || ''} onChange={(e) => handleNestedChange('catalyst', e)} className="col-span-3" placeholder="(Optional)" />
                     </div>
                 </div>
               </div>
-             
-              {/* --- ZOHO PEOPLE SETTINGS --- */}
+              {/* People */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <UserSquare className="h-4 w-4 mr-2" />
-                  Zoho People Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><UserSquare className="h-4 w-4 mr-2" />Zoho People Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="people_orgId" className="text-right">Org ID</Label>
-                    <Input id="people_orgId" name="orgId" value={formData.people?.orgId || ''} onChange={(e) => handleNestedChange('people', e)} className="col-span-3" placeholder="(Optional) e.g., 89740123" />
+                    <Input id="people_orgId" name="orgId" value={formData.people?.orgId || ''} onChange={(e) => handleNestedChange('people', e)} className="col-span-3" placeholder="(Optional)" />
                     </div>
                 </div>
               </div>
-
-              {/* --- ZOHO MEETING SETTINGS (ADDED) --- */}
+              {/* Meeting */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Video className="h-4 w-4 mr-2" />
-                  Zoho Meeting Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><Video className="h-4 w-4 mr-2" />Zoho Meeting Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="meeting_zsoid" className="text-right">Org ID (zsoid)</Label>
-                    <Input id="meeting_zsoid" name="zsoid" value={formData.meeting?.zsoid || ''} onChange={(e) => handleNestedChange('meeting', e)} className="col-span-3" placeholder="(Optional) e.g., 1000XXXX" />
+                    <Label htmlFor="meeting_zsoid" className="text-right">Org ID</Label>
+                    <Input id="meeting_zsoid" name="zsoid" value={formData.meeting?.zsoid || ''} onChange={(e) => handleNestedChange('meeting', e)} className="col-span-3" placeholder="(Optional)" />
                     </div>
                 </div>
               </div>
-              {/* --- END ADDED --- */}
-
             </div>
            
             {/* --- COLUMN 2 --- */}
             <div className="space-y-6">
-              {/* --- ZOHO INVENTORY SETTINGS --- */}
+              {/* Inventory */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Briefcase className="h-4 w-4 mr-2" />
-                  Zoho Inventory Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><Briefcase className="h-4 w-4 mr-2" />Zoho Inventory Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="inventory_orgId" className="text-right">Org ID</Label>
@@ -396,13 +291,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
-             
-              {/* --- ZOHO QNTRL SETTINGS --- */}
+              {/* Qntrl */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Network className="h-4 w-4 mr-2" />
-                  Zoho Qntrl Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><Network className="h-4 w-4 mr-2" />Zoho Qntrl Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="qntrl_orgId" className="text-right">Org ID</Label>
@@ -410,23 +301,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
-             
-              {/* --- ZOHO CREATOR SETTINGS --- */}
+              {/* Creator */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <AppWindow className="h-4 w-4 mr-2" />
-                  Zoho Creator Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><AppWindow className="h-4 w-4 mr-2" />Zoho Creator Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="creator_baseUrl" className="text-right">Base URL</Label>
-                      <Select 
-                        value={formData.creator?.baseUrl || 'www.zohoapis.com'} 
-                        onValueChange={(value) => handleCreatorSelectChange('baseUrl', value)}
-                      >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Select Base URL" />
-                        </SelectTrigger>
+                      <Select value={formData.creator?.baseUrl || 'www.zohoapis.com'} onValueChange={(value) => handleCreatorSelectChange('baseUrl', value)}>
+                        <SelectTrigger className="col-span-3"><SelectValue placeholder="Select Base URL" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="www.zohoapis.com">www.zohoapis.com (US)</SelectItem>
                           <SelectItem value="www.zohoapis.eu">www.zohoapis.eu (EU)</SelectItem>
@@ -438,21 +320,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="creator_ownerName" className="text-right">Owner Name</Label>
-                      <Input id="creator_ownerName" name="ownerName" value={formData.creator?.ownerName || ''} onChange={(e) => handleNestedChange('creator', e)} className="col-span-3" placeholder="e.g., your_admin_name" />
+                      <Input id="creator_ownerName" name="ownerName" value={formData.creator?.ownerName || ''} onChange={(e) => handleNestedChange('creator', e)} className="col-span-3" placeholder="e.g., admin" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="creator_appName" className="text-right">App Link Name</Label>
-                      <Input id="creator_appName" name="appName" value={formData.creator?.appName || ''} onChange={(e) => handleNestedChange('creator', e)} className="col-span-3" placeholder="e.g., my-sales-app" />
+                      <Label htmlFor="creator_appName" className="text-right">App Link</Label>
+                      <Input id="creator_appName" name="appName" value={formData.creator?.appName || ''} onChange={(e) => handleNestedChange('creator', e)} className="col-span-3" placeholder="e.g., my-app" />
                     </div>
                 </div>
               </div>
-
-              {/* --- ZOHO PROJECTS --- */}
+              {/* Projects */}
               <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <FolderKanban className="h-4 w-4 mr-2" />
-                  Zoho Projects Settings
-                </h4>
+                <h4 className="text-sm font-semibold mb-4 flex items-center"><FolderKanban className="h-4 w-4 mr-2" />Zoho Projects Settings</h4>
                 <div className="grid gap-4 pl-4 border-l-2 ml-2">
                     <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="projects_portalId" className="text-right">Portal ID</Label>
@@ -467,10 +345,41 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 </div>
               </div>
 
+              {/* --- ADDED: ZOHO EXPENSE SECTION --- */}
+              <div>
+                <h4 className="text-sm font-semibold mb-4 flex items-center">
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Zoho Expense Settings
+                </h4>
+                <div className="grid gap-4 pl-4 border-l-2 ml-2">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="expense_orgId" className="text-right">Org ID</Label>
+                        <Input 
+                            id="expense_orgId" 
+                            name="orgId" 
+                            value={formData.expense?.orgId || ''} 
+                            onChange={(e) => handleNestedChange('expense', e)} 
+                            className="col-span-3" 
+                            placeholder="Required for Expense API"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="expense_customModuleApiName" className="text-right">Module API</Label>
+                        <Input 
+                            id="expense_customModuleApiName" 
+                            name="customModuleApiName" 
+                            value={formData.expense?.customModuleApiName || ''} 
+                            onChange={(e) => handleNestedChange('expense', e)} 
+                            className="col-span-3" 
+                            placeholder="(Optional) Default Custom Module"
+                        />
+                    </div>
+                </div>
+              </div>
+              {/* --- END ZOHO EXPENSE --- */}
+
             </div>
-
           </div>
-
 
           <DialogFooter className="pt-8">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
@@ -479,16 +388,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
         </form>
       </DialogContent>
     </Dialog>
-
+    {/* Portal Selector Modal remains same */}
     <PortalSelectorModal
         isOpen={isPortalModalOpen}
         onClose={() => setIsPortalModalOpen(false)}
         portals={portalList}
         onSelect={(portalId) => {
-            setFormData(prev => ({ 
-                ...prev, 
-                projects: { ...(prev.projects as object), portalId } 
-            }));
+            setFormData(prev => ({ ...prev, projects: { ...(prev.projects as object), portalId } }));
             setIsPortalModalOpen(false);
         }}
     />
@@ -496,14 +402,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
   );
 };
 
-
-interface PortalSelectorModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    portals: Portal[];
-    onSelect: (portalId: string) => void;
-}
-
+// ... (PortalSelectorModal component remains same) ...
 const PortalSelectorModal: React.FC<PortalSelectorModalProps> = ({ isOpen, onClose, portals, onSelect }) => {
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -516,7 +415,6 @@ const PortalSelectorModal: React.FC<PortalSelectorModalProps> = ({ isOpen, onClo
                 </DialogHeader>
                 <ScrollArea className="max-h-60">
                     <div className="space-y-2 p-1">
-                        {/* --- MODIFICATION: Use 'id' and 'portal_name' --- */}
                         {portals.map((portal) => (
                             <Button
                                 key={portal.id}
@@ -527,7 +425,6 @@ const PortalSelectorModal: React.FC<PortalSelectorModalProps> = ({ isOpen, onClo
                                 {portal.portal_name}
                             </Button>
                         ))}
-                        {/* --- END MODIFICATION --- */}
                     </div>
                 </ScrollArea>
                 <DialogFooter>

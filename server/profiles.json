@@ -1690,5 +1690,45 @@
     "meeting": {
       "zsoid": ""
     }
+  },
+  {
+    "profileName": "expense",
+    "clientId": "1000.4PV7ZBUX9VKWIMPH0PZSI5MT780SFV",
+    "clientSecret": "369c0c06e86b3525f4d55d8fc5db470e813adca18f",
+    "refreshToken": "1000.90abdde397b8a9a3eb1f64a020ca4cc7.4f383324b7b1a74569224b96b196cd78",
+    "desk": {
+      "orgId": "",
+      "defaultDepartmentId": "",
+      "fromEmailAddress": "",
+      "mailReplyAddressId": ""
+    },
+    "inventory": {
+      "orgId": ""
+    },
+    "catalyst": {
+      "projectId": "",
+      "fromEmail": ""
+    },
+    "qntrl": {
+      "orgId": ""
+    },
+    "people": {
+      "orgId": ""
+    },
+    "creator": {
+      "baseUrl": "www.zohoapis.com",
+      "ownerName": "",
+      "appName": ""
+    },
+    "projects": {
+      "portalId": ""
+    },
+    "meeting": {
+      "zsoid": ""
+    },
+    "expense": {
+      "orgId": "908260928",
+      "customModuleApiName": "cm_testmodule"
+    }
   }
 ]

@@ -28,6 +28,8 @@ import ProjectsTasksPage from './pages/ProjectsTasksPage';
 import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
 import LiveStats from '@/pages/LiveStats';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+import BulkExpense from './pages/BulkExpense'; // <--- ADDED IMPORT
+import { CreditCard } from 'lucide-react'; // Make sure to add this if used in icons map
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
 
@@ -66,6 +68,10 @@ export interface Profile {
   meeting?: {
     zsoid?: string;
   };
+  expense?: {
+    orgId: string;
+    customModuleApiName?: string;
+  };
 }
 
 export interface TicketFormData {
@@ -76,7 +82,7 @@ export interface TicketFormData {
   sendDirectReply: boolean;
   verifyEmail: boolean;
   displayName: string;
-  stopAfterFailures: number; // --- ADDED THIS ---
+  stopAfterFailures: number; 
 }
 export interface InvoiceFormData {
   emails: string;
@@ -345,6 +351,41 @@ export interface WebinarJobs {
     [profileName: string]: WebinarJobState;
 }
 
+// --- ADDED EXPENSE INTERFACES ---
+export interface ExpenseFormData {
+  moduleName: string;
+  bulkField: string;
+  bulkValues: string;
+  defaultData: Record<string, string>;
+  delay: number;
+}
+export interface ExpenseResult {
+  rowNumber: number;
+  primaryValue: string;
+  success: boolean;
+  message: string;
+  details?: string;
+  recordId?: string;
+  fullResponse?: any;
+  timestamp?: Date;
+}
+export interface ExpenseJobState {
+    formData: ExpenseFormData;
+    results: ExpenseResult[];
+    isProcessing: boolean;
+    isPaused: boolean;
+    isComplete: boolean;
+    processingStartTime: Date | null;
+    processingTime: number;
+    totalToProcess: number;
+    countdown: number;
+    currentDelay: number;
+    filterText: string;
+}
+export interface ExpenseJobs {
+    [profileName: string]: ExpenseJobState;
+}
+
 const createInitialJobState = (): JobState => ({
   formData: {
     emails: '',
@@ -354,7 +395,7 @@ const createInitialJobState = (): JobState => ({
     sendDirectReply: false,
     verifyEmail: false,
     displayName: '',
-    stopAfterFailures: 0, // --- ADDED THIS DEFAULT ---
+    stopAfterFailures: 0, 
   },
   results: [],
   isProcessing: false,
@@ -527,6 +568,27 @@ const createInitialWebinarJobState = (): WebinarJobState => ({
     filterText: '',
 });
 
+// --- ADDED INITIAL STATE CREATOR ---
+const createInitialExpenseJobState = (): ExpenseJobState => ({
+    formData: {
+        moduleName: '',
+        bulkField: '',
+        bulkValues: '',
+        defaultData: {},
+        delay: 1,
+    },
+    results: [],
+    isProcessing: false,
+    isPaused: false,
+    isComplete: false,
+    processingStartTime: null,
+    processingTime: 0,
+    totalToProcess: 0,
+    countdown: 0,
+    currentDelay: 1,
+    filterText: '',
+});
+
 
 const MainApp = () => {
     const { toast } = useToast();
@@ -539,6 +601,8 @@ const MainApp = () => {
     const [creatorJobs, setCreatorJobs] = useState<CreatorJobs>({});
     const [projectsJobs, setProjectsJobs] = useState<ProjectsJobs>({});
     const [webinarJobs, setWebinarJobs] = useState<WebinarJobs>({});
+    const [expenseJobs, setExpenseJobs] = useState<ExpenseJobs>({}); // <--- ADDED STATE
+    
     const socketRef = useRef<Socket | null>(null);
     const queryClient = useQueryClient();
 
@@ -554,6 +618,7 @@ const MainApp = () => {
     useJobTimer(creatorJobs, setCreatorJobs, 'creator');
     useJobTimer(projectsJobs, setProjectsJobs, 'projects');
     useJobTimer(webinarJobs, setWebinarJobs, 'webinar');
+    useJobTimer(expenseJobs, setExpenseJobs, 'expense'); // <--- ADDED TIMER
 
     useEffect(() => {
         const socket = io(SERVER_URL);
@@ -594,7 +659,6 @@ const MainApp = () => {
           });
         });
 
-        // --- NEW LISTENER FOR AUTOMATIC PAUSE ---
         socket.on('jobPaused', (data: { profileName: string, reason: string }) => {
             setJobs(prevJobs => {
                 if (!prevJobs[data.profileName]) return prevJobs;
@@ -612,7 +676,6 @@ const MainApp = () => {
                 variant: "destructive" 
             });
         });
-        // ----------------------------------------
 
         socket.on('invoiceResult', (result: InvoiceResult & { profileName: string }) => {
             setInvoiceJobs(prevJobs => {
@@ -746,9 +809,28 @@ const MainApp = () => {
             };
           });
         });
+        
+        // --- ADDED: Socket Listener for Expenses ---
+        socket.on('expenseResult', (result: ExpenseResult & { profileName: string }) => {
+          setExpenseJobs(prevJobs => {
+            const profileJob = prevJobs[result.profileName] || createInitialExpenseJobState();
+            
+            const newResults = [ { ...result, timestamp: new Date() }, ...profileJob.results]; 
+
+            const isLast = newResults.length >= profileJob.totalToProcess;
+            return {
+              ...prevJobs,
+              [result.profileName]: {
+                ...profileJob,
+                results: newResults,
+                countdown: isLast ? 0 : profileJob.currentDelay, 
+              }
+            };
+          });
+        });
 
 
-        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar'}, title: string, description: string, variant?: "destructive") => {
+        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar' | 'expense'}, title: string, description: string, variant?: "destructive") => {
             const { profileName, jobType } = data;
             
             const getInitialState = (type: string) => {
@@ -762,6 +844,7 @@ const MainApp = () => {
                     case 'creator': return createInitialCreatorJobState();
                     case 'projects': return createInitialProjectsJobState();
                     case 'webinar': return createInitialWebinarJobState();
+                    case 'expense': return createInitialExpenseJobState(); // <--- ADDED
                     default: return {} as any;
                 }
             };
@@ -789,6 +872,7 @@ const MainApp = () => {
             else if (jobType === 'creator') setCreatorJobs(updater);
             else if (jobType === 'projects') setProjectsJobs(updater);
             else if (jobType === 'webinar') setWebinarJobs(updater);
+            else if (jobType === 'expense') setExpenseJobs(updater); // <--- ADDED
             
             toast({ title, description, variant });
         };
@@ -802,7 +886,6 @@ const MainApp = () => {
         };
     }, [toast]);
     
-    // ... (rest of the file remains same)
     const handleOpenAddProfile = () => {
         setEditingProfile(null);
         setIsProfileModalOpen(true);
@@ -870,7 +953,6 @@ const MainApp = () => {
                             />
                         }
                     />
-                    {/* ... other routes ... */}
                     <Route
                         path="/single-ticket"
                         element={
@@ -1036,6 +1118,22 @@ const MainApp = () => {
                             />
                         }
                     />
+                    
+                    {/* --- ADDED: Bulk Expense Route --- */}
+                    <Route
+                        path="/bulk-expense"
+                        element={
+                            <BulkExpense
+                                jobs={expenseJobs}
+                                setJobs={setExpenseJobs}
+                                socket={socketRef.current}
+                                createInitialJobState={createInitialExpenseJobState}
+                                onAddProfile={handleOpenAddProfile}
+                                onEditProfile={handleOpenEditProfile}
+                                onDeleteProfile={handleDeleteProfile}
+                            />
+                        }
+                    />
 					
 					<Route
                         path="/live-stats"
@@ -1044,7 +1142,7 @@ const MainApp = () => {
                                 onAddProfile={handleOpenAddProfile}
                                 onEditProfile={handleOpenEditProfile}
                                 onDeleteProfile={handleDeleteProfile}
-                                profiles={[]} // Layout expects these, pass defaults or active profile lists if available
+                                profiles={[]} 
                                 selectedProfile={null}
                                 onProfileChange={() => {}}
                                 apiStatus={{ status: 'success', message: '' }}
@@ -1063,6 +1161,7 @@ const MainApp = () => {
                                     creatorJobs={creatorJobs}
                                     projectsJobs={projectsJobs}
                                     webinarJobs={webinarJobs}
+                                    expenseJobs={expenseJobs} // <--- ADDED PROP
                                 />
                             </DashboardLayout>
                         }
