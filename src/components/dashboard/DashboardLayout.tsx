@@ -103,86 +103,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </SidebarNavLink>
               </div>
 
-			{/* --- Zoho Creator --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Creator</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    no from name - subject and content
-                </p>
-                <SidebarNavLink to="/creator-forms">
-                  <AppWindow className="h-4 w-4" />
-                  Forms
-                </SidebarNavLink>
-              </div>
-              
-              {/* --- Zoho Projects --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Projects</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    from name - subject can content (html image only)
-                </p>
-                <SidebarNavLink to="/projects-tasks">
-                  <FolderKanban className="h-4 w-4" />
-                  Task Management
-                </SidebarNavLink>
-              </div>
-
-			  {/* --- Zoho People --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho People</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    no from name - subject
-                </p>
-                <SidebarNavLink to="/people-forms">
-                  <FileText className="h-4 w-4" />
-                  Forms
-                </SidebarNavLink>
-              </div>
-
-              {/* --- Zoho Expense (ADDED) --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Expense</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    check connection status
-                </p>
-                <SidebarNavLink to="/expense-status">
-                  <Receipt className="h-4 w-4" />
-                  Expense Status
-                </SidebarNavLink>
-              </div>
-              {/* --- END ADDED --- */}
-			  
-			                {/* --- Zoho Qntrl --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Qntrl</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    no from name - subject and content
-                </p>
-                <SidebarNavLink to="/qntrl-forms">
-                  <Network className="h-4 w-4" />
-                  Forms
-                </SidebarNavLink>
-              </div>
-
-
-              {/* --- Zoho Meeting --- */}
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Meeting</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    from name - subject can be add
-                </p>
-                <SidebarNavLink to="/bulk-webinar-registration">
-                  <Video className="h-4 w-4" />
-                  Webinar Registration
-                </SidebarNavLink>
-              </div>
-
               {/* --- Zoho Inventory --- */}
               <div>
                 <SidebarDivider />
@@ -223,7 +143,84 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </SidebarNavLink>
               </div>
 
-           
+              {/* --- Zoho Qntrl --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Qntrl</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    no from name - subject and content
+                </p>
+                <SidebarNavLink to="/qntrl-forms">
+                  <Network className="h-4 w-4" />
+                  Forms
+                </SidebarNavLink>
+              </div>
+
+              {/* --- Zoho People --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho People</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    no from name - subject
+                </p>
+                <SidebarNavLink to="/people-forms">
+                  <FileText className="h-4 w-4" />
+                  Forms
+                </SidebarNavLink>
+              </div>
+
+              {/* --- Zoho Creator --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Creator</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    no from name - subject and content
+                </p>
+                <SidebarNavLink to="/creator-forms">
+                  <AppWindow className="h-4 w-4" />
+                  Forms
+                </SidebarNavLink>
+              </div>
+              
+              {/* --- Zoho Projects --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Projects</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    from name - subject can content (html image only)
+                </p>
+                <SidebarNavLink to="/projects-tasks">
+                  <FolderKanban className="h-4 w-4" />
+                  Task Management
+                </SidebarNavLink>
+              </div>
+
+              {/* --- Zoho Meeting --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Meeting</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    from name - subject can be add
+                </p>
+                <SidebarNavLink to="/bulk-webinar-registration">
+                  <Video className="h-4 w-4" />
+                  Webinar Registration
+                </SidebarNavLink>
+              </div>
+
+              {/* --- Zoho Expense (ADDED) --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Expense</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    check connection status
+                </p>
+                <SidebarNavLink to="/expense-status">
+                  <Receipt className="h-4 w-4" />
+                  Expense Status
+                </SidebarNavLink>
+              </div>
+              {/* --- END ADDED --- */}
               
             </nav>
           </div>
