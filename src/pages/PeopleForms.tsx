@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Socket } from 'socket.io-client';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom'; // --- ADDED THIS ---
 import { Profile, PeopleJobs, PeopleJobState, PeopleFormData } from '@/App';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { 
     FileText, RefreshCw, Loader2, Check, X, Shield, Send, Users, Clock, 
-    Pause, Play, Square, CheckCircle2, XCircle, Hourglass, AlertTriangle 
+    Pause, Play, Square, CheckCircle2, XCircle, Hourglass 
 } from 'lucide-react';
 import {
   Select,
@@ -239,8 +239,7 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     bulkPrimaryField, 
     bulkPrimaryValues, 
     bulkDefaultData, 
-    bulkDelay,
-    stopAfterFailures
+    bulkDelay 
   } = formData;
 
   const filteredForms = useMemo(() => {
@@ -508,8 +507,7 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
         primaryFieldLabelName: bulkPrimaryField,
         primaryFieldValues: primaryValues,
         defaultData: bulkDefaultData,
-        delay: bulkDelay,
-        stopAfterFailures: Number(stopAfterFailures) || 0 // --- ADDED ---
+        delay: bulkDelay
     });
   };
 
@@ -719,7 +717,7 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
                                             />
                                         </div>
                                         
-                                        {/* --- Delay Input + Auto-Pause + Side-by-Side Stats --- */}
+                                        {/* --- Delay Input + Side-by-Side Stats --- */}
                                         <div className="flex flex-wrap items-end gap-6">
                                             <div className="space-y-2">
                                                 <Label htmlFor="delay">Delay (seconds)</Label>
@@ -731,24 +729,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
                                                     value={bulkDelay}
                                                     onChange={(e) => handleFormStateChange('bulkDelay', parseInt(e.target.value) || 0)}
                                                     className="w-24"
-                                                    disabled={activeJob.isProcessing}
-                                                />
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label htmlFor="autoPause" className="flex items-center space-x-2 text-amber-600">
-                                                    <AlertTriangle className="h-4 w-4" />
-                                                    <span>Auto-Pause</span>
-                                                </Label>
-                                                <Input
-                                                    id="autoPause"
-                                                    type="number"
-                                                    min="0"
-                                                    step="1"
-                                                    placeholder="0 (Off)"
-                                                    value={stopAfterFailures === 0 ? '' : stopAfterFailures}
-                                                    onChange={(e) => handleFormStateChange('stopAfterFailures', Number(e.target.value))}
-                                                    className="w-24 placeholder:text-muted-foreground/50"
                                                     disabled={activeJob.isProcessing}
                                                 />
                                             </div>

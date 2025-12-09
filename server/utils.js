@@ -75,13 +75,14 @@ const parseError = (error) => {
                 fullResponse: error.response.data
             };
         }
-        // Handle Meeting's error structure
+        // --- ADDED: Handle Meeting's error structure ---
         if (error.response.data?.error?.message) {
              return {
                 message: error.response.data.error.message,
                 fullResponse: error.response.data
             };
         }
+        // ---
         if (error.response.data?.result?.[0]?.error?.message) {
              return {
                 message: error.response.data.result[0].error.message,
@@ -132,6 +133,7 @@ const getValidAccessToken = async (profile, service) => {
         return tokenCache[cacheKey].data;
     }
     
+    // --- FIX #1: Added 'meeting' scopes ---
     const scopes = {
         desk: 'Desk.tickets.ALL,Desk.settings.ALL,Desk.basic.READ',
         inventory: 'ZohoInventory.contacts.ALL,ZohoInventory.invoices.ALL,ZohoInventory.settings.ALL',
@@ -145,10 +147,10 @@ const getValidAccessToken = async (profile, service) => {
             'ZohoProjects.tasklists.ALL',
             'ZohoProjects.tasks.ALL',
         ].join(','),
-        meeting: 'ZohoMeeting.manageOrg.READ,ZohoMeeting.webinar.READ,ZohoMeeting.webinar.DELETE,ZohoMeeting.webinar.UPDATE,ZohoMeeting.webinar.CREATE,ZohoMeeting.user.READ',
-        // --- ADDED EXPENSE SCOPE ---
-        expense: 'ZohoExpense.fullaccess.ALL'
+        // --- ADDED THIS LINE based on your docs ---
+        meeting: 'ZohoMeeting.manageOrg.READ,ZohoMeeting.webinar.READ,ZohoMeeting.webinar.DELETE,ZohoMeeting.webinar.UPDATE,ZohoMeeting.webinar.CREATE,ZohoMeeting.user.READ'
     };
+    // --- END FIX ---
     
     const requiredScope = scopes[service];
     if (!requiredScope) {
@@ -193,9 +195,8 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     }
 
     const serviceConfig = profile[service];
-    
-    // Services that don't need strict config checks or handled separately
-    if (!serviceConfig && service !== 'qntrl' && service !== 'people' && service !== 'meeting' && service !== 'expense') {
+    // --- FIX #2: Added 'meeting' to the list of services that don't need config ---
+    if (!serviceConfig && service !== 'qntrl' && service !== 'people' && service !== 'meeting') {
          throw new Error(`Configuration for service "${service}" is missing in profile "${profile.profileName}".`);
     }
 
@@ -208,6 +209,7 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
         fullUrl = `https://${serviceConfig.baseUrl}/creator/v2.1${relativeUrl}`;
     } 
     else {
+        // --- FIX #3: Added 'meeting' base URL ---
         const baseUrls = {
             desk: 'https://desk.zoho.com',
             inventory: 'https://www.zohoapis.com/inventory',
@@ -215,10 +217,10 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
             qntrl: 'https://coreapi.qntrl.com',
             people: 'https://people.zoho.com',
             projects: 'https://projectsapi.zoho.com/api/v3',
-            meeting: 'https://meeting.zoho.com',
-            // --- ADDED EXPENSE URL ---
-            expense: 'https://www.zohoapis.com/expense/v1' 
+            // --- ADDED THIS LINE ---
+            meeting: 'https://meeting.zoho.com'
         };
+        // --- END FIX ---
         
         const baseUrl = baseUrls[service];
         if (!baseUrl) {
@@ -241,13 +243,9 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
         params.organization_id = profile.inventory.orgId;
     }
     
-    // --- ADDED EXPENSE HEADER ---
-    if (service === 'expense' && profile.expense?.orgId) {
-        headers['X-com-zoho-expense-organizationid'] = profile.expense.orgId;
-    }
-
     let requestData = data;
-    if ( (service === 'creator' || service === 'meeting' || service === 'expense') && (method.toLowerCase() === 'post' || method.toLowerCase() === 'patch')) {
+    // --- MODIFIED: Handle JSON for meeting POST as well ---
+    if ( (service === 'creator' || service === 'meeting') && (method.toLowerCase() === 'post' || method.toLowerCase() === 'patch')) {
         headers['Content-Type'] = 'application/json';
         requestData = data; 
     }

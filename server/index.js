@@ -13,7 +13,6 @@ const peopleHandler = require('./people-handler');
 const creatorHandler = require('./creator-handler');
 const projectsHandler = require('./projects-handler');
 const meetingHandler = require('./meeting-handler');
-const expenseHandler = require('./expense-handler'); // --- IMPORT NEW HANDLER ---
 require('dotenv').config();
 
 const app = express();
@@ -33,7 +32,6 @@ peopleHandler.setActiveJobs(activeJobs);
 creatorHandler.setActiveJobs(activeJobs);
 projectsHandler.setActiveJobs(activeJobs);
 meetingHandler.setActiveJobs(activeJobs);
-expenseHandler.setActiveJobs(activeJobs); // --- REGISTER HANDLER ---
 
 
 const authStates = {};
@@ -90,10 +88,7 @@ app.post('/api/zoho/auth', (req, res) => {
         'ZohoMeeting.webinar.UPDATE',
         'ZohoMeeting.webinar.CREATE',
         'ZohoMeeting.user.READ',
-        
-        // --- ADDED EXPENSE SCOPE ---
-        'ZohoExpense.fullaccess.ALL',
-        
+		
         'WorkDrive.workspace.ALL',
         'WorkDrive.files.ALL',
         'ZohoPC.files.ALL',
@@ -198,11 +193,11 @@ app.post('/api/projects/tasks/single', async (req, res) => {
         const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
 
         const result = await projectsHandler.handleCreateSingleTask({
-            ...formData, 
-            taskName: formData.taskNames, 
+            ...formData, // contains projectId, tasklistId, taskNameS (as taskName), taskDescription
+            taskName: formData.taskNames, // handle single name
             portalId: activeProfile?.projects?.portalId,
             selectedProfileName,
-            bulkDefaultData: formData.bulkDefaultData || {} 
+            bulkDefaultData: formData.bulkDefaultData || {} // <-- Pass dynamic fields
         });
         res.json(result);
     } catch (error) {
@@ -370,20 +365,25 @@ io.on('connection', (socket) => {
                     throw new Error('Projects config (portalId) is missing.');
                 }
                 const { portalId } = activeProfile.projects;
+                // Use the portal ID to fetch portal details as a verification step
                 const portalResponse = await makeApiCall('get', `/portal/${portalId}`, null, activeProfile, 'projects');
                 
                 validationData = { 
                     orgName: `Portal: ${portalResponse.data.portal_details.name}`,
                     agentInfo: { 
-                        firstName: `Portal Owner`, 
+                        firstName: `Portal Owner`, // Info is not readily available here, just confirming connection
                         lastName: '' 
                     },
                     portalData: portalResponse.data 
                 };
             }
+            // --- MODIFIED: ZOHO MEETING API STATUS CHECK ---
             else if (service === 'meeting') {
+                // --- FIX: Using the correct endpoint you provided ---
                 const userDetailsResponse = await makeApiCall('get', '/api/v2/user.json', null, activeProfile, 'meeting');
-                const userData = userDetailsResponse.data;
+                
+                // Assuming response structure based on other Zoho APIs and your docs
+                const userData = userDetailsResponse.data; // The root object might be the user
                 validationData = { 
                     orgName: userData.organization?.org_name || 'Zoho Meeting Org',
                     agentInfo: { 
@@ -393,47 +393,7 @@ io.on('connection', (socket) => {
                     userData: userData
                 };
             }
-            // --- ADDED EXPENSE CHECK (FIXED) ---
-            else if (service === 'expense') {
-                // 1. Basic Requirement: Org ID must be present
-                if (!activeProfile.expense || !activeProfile.expense.orgId) {
-                    throw new Error('Expense Org ID is missing in profile.');
-                }
-                
-                // 2. Perform a lightweight generic check (List Currencies) to verify Auth & Org ID
-                // This will succeed if the Org ID is valid, even if no module is configured.
-                const basicCheckResponse = await makeApiCall('get', '/settings/currencies', null, activeProfile, 'expense');
-                
-                // Default success data
-                validationData = { 
-                    orgName: `Org: ${activeProfile.expense.orgId}`,
-                    agentInfo: { 
-                        firstName: 'Expense', 
-                        lastName: 'Connected' 
-                    }
-                };
-
-                // 3. Conditional Module Check (Only if Module Name is provided)
-                if (activeProfile.expense.moduleApiName) {
-                    const moduleName = activeProfile.expense.moduleApiName;
-                    try {
-                        const fieldsResponse = await makeApiCall('get', `/settings/fields?entity=${moduleName}`, null, activeProfile, 'expense');
-                        validationData.moduleDetails = {
-                            name: moduleName,
-                            fieldCount: fieldsResponse.data.fields ? fieldsResponse.data.fields.length : 0
-                        };
-                        validationData.fullResponse = fieldsResponse.data; // Include field data if successful
-                    } catch (modError) {
-                        // If the specific module check fails, we throw an error to alert the user
-                        // that while the connection is okay, their module config is wrong.
-                        throw new Error(`Connection Successful, but Module '${moduleName}' is invalid or not found.`);
-                    }
-                } else {
-                     // If no module name, just return the basic check info
-                     validationData.fullResponse = basicCheckResponse.data;
-                }
-            }
-            // --- END ADDED ---
+            // --- END MODIFIED ---
 
             socket.emit('apiStatusResult', { 
                 success: true, 
@@ -473,7 +433,7 @@ io.on('connection', (socket) => {
         });
     });
 
-    // Utility listener for Profile Modal
+    // --- ADDED: Utility listener for Profile Modal ---
     socket.on('getProjectsPortals', (data) => {
         projectsHandler.handleGetPortals(socket, data);
     });
@@ -531,7 +491,7 @@ io.on('connection', (socket) => {
             if (activeProfile) handler(socket, { ...data, activeProfile });
         });
     }
-    
+	
     // Zoho Qntrl Listeners
     const qntrlListeners = {
         'getQntrlForms': qntrlHandler.handleGetForms,
@@ -593,16 +553,17 @@ io.on('connection', (socket) => {
         });
     }
 
-    // Zoho Projects Listeners
+    // --- MODIFIED: Zoho Projects Listeners ---
     const projectsListeners = {
         'getProjectsPortals': projectsHandler.handleGetPortals, 
         'getProjectsProjects': projectsHandler.handleGetProjects,
-        'getProjectsTaskLists': projectsHandler.handleGetTaskLists, 
+        'getProjectsTaskLists': projectsHandler.handleGetTaskLists, // Matches your handler
         'getProjectsTasks': projectsHandler.handleGetTasks,
         'startBulkCreateTasks': projectsHandler.handleStartBulkCreateTasks,
         'getProjectsTaskLayout': projectsHandler.handleGetTaskLayout,
-        'updateProjectDetails': projectsHandler.handleUpdateProjectDetails,
+		'updateProjectDetails': projectsHandler.handleUpdateProjectDetails,
     };
+    // --- END MODIFICATION ---
 
     for (const [event, handler] of Object.entries(projectsListeners)) {
         socket.on(event, (data) => {
@@ -610,22 +571,25 @@ io.on('connection', (socket) => {
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
             if (activeProfile) {
                 if (typeof handler === 'function') {
+                    // Pass the activeProfile to the handler
                     handler(socket, { ...data, activeProfile });
                 } else {
                     console.error(`[ERROR] Handler for event '${event}' is not a function.`);
                     socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.'` });
                 }
             } else {
+                 // Emit error if profile not found, except for portal fetch which uses temp credentials
                  if(event !== 'getProjectsPortals') {
                     socket.emit('bulkError', { message: 'Active profile not found.' });
                  } else {
+                    // For getProjectsPortals, the handler creates its own temp profile
                     handler(socket, data);
                  }
             }
         });
     }
 
-    // Zoho Meeting Listeners
+    // --- ADDED: Zoho Meeting Listeners ---
     const meetingListeners = {
         'fetchWebinars': meetingHandler.handleGetWebinars,
         'startBulkRegistration': meetingHandler.handleStartBulkRegistration,
@@ -641,26 +605,6 @@ io.on('connection', (socket) => {
                 } else {
                     console.error(`[ERROR] Handler for event '${event}' is not a function.`);
                     socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` });
-                }
-            } else {
-                 socket.emit('bulkError', { message: 'Active profile not found.' });
-            }
-        });
-    }
-
-    // --- ADDED: Zoho Expense Listeners ---
-    const expenseListeners = {
-        'getExpenseFields': expenseHandler.handleGetExpenseFields,
-        'createExpenseRecord': expenseHandler.handleCreateExpenseRecord,
-    };
-
-    for (const [event, handler] of Object.entries(expenseListeners)) {
-        socket.on(event, (data) => {
-            const profiles = readProfiles();
-            const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-            if (activeProfile) {
-                if (typeof handler === 'function') {
-                    handler(socket, { ...data, activeProfile });
                 }
             } else {
                  socket.emit('bulkError', { message: 'Active profile not found.' });

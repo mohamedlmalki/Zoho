@@ -162,19 +162,13 @@ const handler = {
 
     handleStartBulkCreateCards: async (socket, data) => {
         const { selectedProfileName, activeProfile, totalToProcess } = data;
-        const { selectedFormId, bulkPrimaryField, bulkPrimaryValues, bulkDefaultData, bulkDelay, stopAfterFailures } = data.formData;
+        const { selectedFormId, bulkPrimaryField, bulkPrimaryValues, bulkDefaultData, bulkDelay } = data.formData;
         const delay = (Number(bulkDelay) || 1) * 1000;
         const jobType = 'qntrl';
         const jobId = createJobId(socket.id, selectedProfileName, jobType);
 
         console.log(`[INFO] Starting bulk Qntrl card creation for ${selectedProfileName}. Job ID: ${jobId}`);
-        activeJobs[jobId] = { 
-            status: 'running', 
-            total: totalToProcess, 
-            processed: 0,
-            consecutiveFailures: 0, // <--- Initialize failure counter
-            stopAfterFailures: Number(stopAfterFailures) || 0 // <--- Store threshold
-        };
+        activeJobs[jobId] = { status: 'running', total: totalToProcess, processed: 0 };
 
         try {
             const orgId = activeProfile.qntrl?.orgId;
@@ -207,25 +201,6 @@ const handler = {
                     }
                 }
 
-                // --- AUTO-PAUSE CHECK ---
-                if (activeJobs[jobId].stopAfterFailures > 0 && 
-                    activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
-                     
-                     if (activeJobs[jobId].status !== 'paused') {
-                         activeJobs[jobId].status = 'paused';
-                         socket.emit('jobPaused', { 
-                            profileName: selectedProfileName, 
-                            reason: `Paused automatically after ${activeJobs[jobId].consecutiveFailures} consecutive failures.` 
-                         });
-                     }
-                     
-                     // Wait while paused
-                     while (activeJobs[jobId]?.status === 'paused') {
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                     }
-                }
-                // ------------------------
-
                 // Construct the data for this specific card
                 const cardData = { ...bulkDefaultData };
                 cardData[bulkPrimaryField] = primaryValue.trim();
@@ -237,14 +212,6 @@ const handler = {
                 }
 
                 const result = await createCardApiCall(cardData, selectedFormId, activeProfile, orgId);
-
-                // --- UPDATE COUNTERS ---
-                if (result.success) {
-                    activeJobs[jobId].consecutiveFailures = 0;
-                } else {
-                    activeJobs[jobId].consecutiveFailures++;
-                }
-                // -----------------------
 
                 socket.emit('qntrlResult', {
                     ...result,

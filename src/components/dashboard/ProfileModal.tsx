@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Profile } from '@/App';
 import { useToast } from '@/hooks/use-toast';
-import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video, Receipt } from 'lucide-react';
+// --- ADDED 'Video' icon ---
+import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { Separator } from '../ui/separator';
 import {
@@ -28,11 +29,13 @@ interface ProfileModalProps {
 
 const SERVER_URL = "http://localhost:3000";
 
+// --- MODIFICATION: Updated interface based on your logs ---
 interface Portal {
   id: string;
   portal_name: string;
-  [key: string]: any; 
+  [key: string]: any; // Other properties
 }
+// --- END MODIFICATION ---
 
 const getInitialFormData = (): Profile => ({
   profileName: '',
@@ -59,20 +62,16 @@ const getInitialFormData = (): Profile => ({
     orgId: '',
   },
   creator: {
-    baseUrl: 'www.zohoapis.com', 
+    baseUrl: 'www.zohoapis.com', // Default to .com
     ownerName: '',
     appName: '',
   },
   projects: {
     portalId: '',
   },
+  // --- ADDED ---
   meeting: {
     zsoid: '',
-  },
-  // --- ADDED: Default state for Expense ---
-  expense: {
-    orgId: '',
-    moduleApiName: '',
   },
   // --- END ADDED ---
 });
@@ -101,10 +100,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 people: { ...getInitialFormData().people, ...profile.people },
                 creator: { ...getInitialFormData().creator, ...profile.creator },
                 projects: { ...getInitialFormData().projects, ...profile.projects },
+                // --- ADDED ---
                 meeting: { ...getInitialFormData().meeting, ...profile.meeting },
-                // --- ADDED: Load Expense profile data ---
-                // @ts-ignore - Ignoring TS error if 'expense' isn't in your main Interface yet
-                expense: { ...getInitialFormData().expense, ...profile.expense },
                 // --- END ADDED ---
             });
         } else {
@@ -136,7 +133,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
             return;
         }
 
+        // 1. "Smart" Case: Only one portal
         if (portals.length === 1) {
+            // --- MODIFICATION: Use 'id' based on log ---
             const portalId = portals[0].id;
             setFormData(prev => ({ 
                 ...prev, 
@@ -146,6 +145,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
             return;
         }
 
+        // 2. "Manual" Case: Multiple portals
         setPortalList(portals);
         setIsPortalModalOpen(true);
         toast({ title: "Multiple Portals Found", description: "Please select your portal from the list." });
@@ -175,8 +175,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // --- MODIFIED: Added 'expense' to the allowed types ---
-  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense', e: React.ChangeEvent<HTMLInputElement>) => {
+  // --- MODIFIED ---
+  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting', e: React.ChangeEvent<HTMLInputElement>) => {
+  // --- END MODIFIED ---
     const { name, value } = e.target;
     setFormData(prev => ({
         ...prev,
@@ -363,7 +364,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 </div>
               </div>
 
-              {/* --- ZOHO MEETING SETTINGS --- */}
+              {/* --- ZOHO MEETING SETTINGS (ADDED) --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">
                   <Video className="h-4 w-4 mr-2" />
@@ -376,6 +377,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
+              {/* --- END ADDED --- */}
 
             </div>
            
@@ -465,27 +467,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 </div>
               </div>
 
-              {/* --- ZOHO EXPENSE SETTINGS (ADDED) --- */}
-              <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Zoho Expense Settings
-                </h4>
-                <div className="grid gap-4 pl-4 border-l-2 ml-2">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="expense_orgId" className="text-right">Org ID</Label>
-                    {/* @ts-ignore - 'expense' may not be in Profile type yet */}
-                    <Input id="expense_orgId" name="orgId" value={formData.expense?.orgId || ''} onChange={(e) => handleNestedChange('expense', e)} className="col-span-3" placeholder="(Optional)" />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="expense_moduleApiName" className="text-right">Module API Name</Label>
-                    {/* @ts-ignore - 'expense' may not be in Profile type yet */}
-                    <Input id="expense_moduleApiName" name="moduleApiName" value={formData.expense?.moduleApiName || ''} onChange={(e) => handleNestedChange('expense', e)} className="col-span-3" placeholder="e.g., cm_expenses" />
-                    </div>
-                </div>
-              </div>
-              {/* --- END ADDED --- */}
-
             </div>
 
           </div>
@@ -535,6 +516,7 @@ const PortalSelectorModal: React.FC<PortalSelectorModalProps> = ({ isOpen, onClo
                 </DialogHeader>
                 <ScrollArea className="max-h-60">
                     <div className="space-y-2 p-1">
+                        {/* --- MODIFICATION: Use 'id' and 'portal_name' --- */}
                         {portals.map((portal) => (
                             <Button
                                 key={portal.id}
@@ -545,6 +527,7 @@ const PortalSelectorModal: React.FC<PortalSelectorModalProps> = ({ isOpen, onClo
                                 {portal.portal_name}
                             </Button>
                         ))}
+                        {/* --- END MODIFICATION --- */}
                     </div>
                 </ScrollArea>
                 <DialogFooter>

@@ -1,4 +1,4 @@
-// --- FILE: src/App.tsx (MODIFIED) ---
+// --- FILE: src/App.tsx ---
 import React, { useState, useEffect, useRef } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -26,9 +26,8 @@ import PeopleForms from './pages/PeopleForms';
 import CreatorForms from './pages/CreatorForms';
 import ProjectsTasksPage from './pages/ProjectsTasksPage';
 import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
-// --- ADDED ---
-import ExpenseStatus from './pages/ExpenseStatus';
-
+import LiveStats from '@/pages/LiveStats';
+import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
 
@@ -67,12 +66,8 @@ export interface Profile {
   meeting?: {
     zsoid?: string;
   };
-  expense?: {
-    orgId: string;
-    moduleApiName: string;
-  };
 }
-// ... (All other interfaces like TicketFormData, InvoiceFormData, etc. are unchanged) ...
+
 export interface TicketFormData {
   emails: string;
   subject: string;
@@ -81,6 +76,7 @@ export interface TicketFormData {
   sendDirectReply: boolean;
   verifyEmail: boolean;
   displayName: string;
+  stopAfterFailures: number; // --- ADDED THIS ---
 }
 export interface InvoiceFormData {
   emails: string;
@@ -121,6 +117,7 @@ export interface TicketResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date;
 }
 export interface CatalystSignupFormData {
   emails: string;
@@ -164,6 +161,7 @@ export interface QntrlResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date;
 }
 export interface QntrlJobState {
     formData: QntrlFormData;
@@ -256,6 +254,7 @@ export interface CreatorResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date; 
 }
 export interface CreatorJobState {
     formData: CreatorFormData;
@@ -292,6 +291,7 @@ export interface ProjectsResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date;
 }
 export interface ProjectsJobState {
     formData: ProjectsFormData; 
@@ -326,7 +326,7 @@ export interface WebinarResult {
   fullResponse?: any;
   displayName?: string;
   subject?: string;
-  number?: number; // <-- ADDED
+  number?: number; 
 }
 export interface WebinarJobState {
     formData: WebinarFormData; 
@@ -345,7 +345,6 @@ export interface WebinarJobs {
     [profileName: string]: WebinarJobState;
 }
 
-// ... (All createInitial...State functions are unchanged) ...
 const createInitialJobState = (): JobState => ({
   formData: {
     emails: '',
@@ -355,6 +354,7 @@ const createInitialJobState = (): JobState => ({
     sendDirectReply: false,
     verifyEmail: false,
     displayName: '',
+    stopAfterFailures: 0, // --- ADDED THIS DEFAULT ---
   },
   results: [],
   isProcessing: false,
@@ -563,16 +563,17 @@ const MainApp = () => {
             toast({ title: "Connected to server!" });
         });
         
-        // ... (All other socket.on listeners are unchanged) ...
         socket.on('ticketResult', (result: TicketResult & { profileName: string }) => {
           setJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialJobState();
             const isLastTicket = profileJob.results.length + 1 >= profileJob.totalTicketsToProcess;
+            const resultWithTime = { ...result, timestamp: new Date() };
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime], 
                 countdown: isLastTicket ? 0 : profileJob.currentDelay,
               }
             };
@@ -592,6 +593,27 @@ const MainApp = () => {
             }
           });
         });
+
+        // --- NEW LISTENER FOR AUTOMATIC PAUSE ---
+        socket.on('jobPaused', (data: { profileName: string, reason: string }) => {
+            setJobs(prevJobs => {
+                if (!prevJobs[data.profileName]) return prevJobs;
+                return {
+                    ...prevJobs,
+                    [data.profileName]: {
+                        ...prevJobs[data.profileName],
+                        isPaused: true
+                    }
+                };
+            });
+            toast({ 
+                title: "Job Paused Automatically", 
+                description: data.reason, 
+                variant: "destructive" 
+            });
+        });
+        // ----------------------------------------
+
         socket.on('invoiceResult', (result: InvoiceResult & { profileName: string }) => {
             setInvoiceJobs(prevJobs => {
                 const profileJob = prevJobs[result.profileName] || createInitialInvoiceJobState();
@@ -639,11 +661,14 @@ const MainApp = () => {
           setQntrlJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialQntrlJobState();
             const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            
+            const resultWithTime = { ...result, timestamp: new Date() };
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime],
                 countdown: isLast ? 0 : profileJob.currentDelay,
               }
             };
@@ -653,11 +678,14 @@ const MainApp = () => {
           setPeopleJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialPeopleJobState();
             const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            
+            const resultWithTime = { ...result, timestamp: new Date() };
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime], 
                 countdown: isLast ? 0 : profileJob.currentDelay,
               }
             };
@@ -667,11 +695,14 @@ const MainApp = () => {
           setCreatorJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialCreatorJobState();
             const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            
+            const resultWithTime = { ...result, timestamp: new Date() };
+
             return {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: [...profileJob.results, result],
+                results: [...profileJob.results, resultWithTime],
                 countdown: isLast ? 0 : profileJob.currentDelay,
               }
             };
@@ -680,7 +711,7 @@ const MainApp = () => {
         socket.on('projectsResult', (result: ProjectsResult & { profileName: string }) => {
           setProjectsJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialProjectsJobState();
-            const newResults = [...profileJob.results, result];
+            const newResults = [...profileJob.results, { ...result, timestamp: new Date() }];
             const isLast = newResults.length >= profileJob.totalToProcess;
             
             return {
@@ -700,7 +731,7 @@ const MainApp = () => {
             
             const newResult = {
                 ...result,
-                number: profileJob.results.length + 1 // Add the number
+                number: profileJob.results.length + 1
             };
             const newResults = [newResult, ...profileJob.results]; 
 
@@ -709,7 +740,7 @@ const MainApp = () => {
               ...prevJobs,
               [result.profileName]: {
                 ...profileJob,
-                results: newResults, 
+                results: newResults,
                 countdown: isLast ? 0 : profileJob.currentDelay, 
               }
             };
@@ -771,7 +802,7 @@ const MainApp = () => {
         };
     }, [toast]);
     
-    // ... (All handler functions like handleOpenAddProfile, handleSaveProfile, etc. are unchanged) ...
+    // ... (rest of the file remains same)
     const handleOpenAddProfile = () => {
         setEditingProfile(null);
         setIsProfileModalOpen(true);
@@ -839,6 +870,7 @@ const MainApp = () => {
                             />
                         }
                     />
+                    {/* ... other routes ... */}
                     <Route
                         path="/single-ticket"
                         element={
@@ -1004,20 +1036,37 @@ const MainApp = () => {
                             />
                         }
                     />
-
-                    {/* --- ADDED --- */}
-                    <Route
-                        path="/expense-status"
+					
+					<Route
+                        path="/live-stats"
                         element={
-                            <ExpenseStatus
-                                socket={socketRef.current}
+                            <DashboardLayout
                                 onAddProfile={handleOpenAddProfile}
                                 onEditProfile={handleOpenEditProfile}
                                 onDeleteProfile={handleDeleteProfile}
-                            />
+                                profiles={[]} // Layout expects these, pass defaults or active profile lists if available
+                                selectedProfile={null}
+                                onProfileChange={() => {}}
+                                apiStatus={{ status: 'success', message: '' }}
+                                onShowStatus={() => {}}
+                                onManualVerify={() => {}}
+                                socket={socketRef.current}
+                                jobs={jobs}
+                            >
+                                <LiveStats 
+                                    jobs={jobs}
+                                    invoiceJobs={invoiceJobs}
+                                    catalystJobs={catalystJobs}
+                                    emailJobs={emailJobs}
+                                    qntrlJobs={qntrlJobs}
+                                    peopleJobs={peopleJobs}
+                                    creatorJobs={creatorJobs}
+                                    projectsJobs={projectsJobs}
+                                    webinarJobs={webinarJobs}
+                                />
+                            </DashboardLayout>
                         }
                     />
-                    {/* --- END ADDED --- */}
 
                     <Route path="*" element={<NotFound />} />
                 </Routes>
