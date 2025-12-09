@@ -26,11 +26,57 @@ import PeopleForms from './pages/PeopleForms';
 import CreatorForms from './pages/CreatorForms';
 import ProjectsTasksPage from './pages/ProjectsTasksPage';
 import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
-// --- ADDED ---
-import ExpenseStatus from './pages/ExpenseStatus';
+import ExpenseStatus from './pages/ExpenseStatus'; 
+import { ProfileSelector } from '@/components/dashboard/ProfileSelector'; // FIX: Named Import Added
 
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
+
+// --- EXPENSE INTERFACES START ---
+export interface ExpenseBulkField {
+    fieldApiName: string;
+    fieldName: string;
+    fieldValues: string;
+}
+
+export interface ExpenseFormData {
+    selectedModuleApiName: string;
+    moduleFields: any[];
+    bulkIteratingFields: ExpenseBulkField[]; 
+    bulkDefaultData: { [key: string]: string };
+    bulkDelay: number;
+    waitAndInspect: boolean; 
+}
+
+export interface ExpenseResult {
+    primaryValue: string;
+    success: boolean;
+    recordId?: string;
+    details?: string;
+    error?: string;
+    finalStatus: string; 
+    fullResponse?: any;
+}
+
+export interface ExpenseJobState {
+    formData: ExpenseFormData;
+    results: ExpenseResult[];
+    isProcessing: boolean;
+    isPaused: boolean;
+    isComplete: boolean;
+    processingStartTime: Date | null;
+    processingTime: number;
+    totalToProcess: number;
+    countdown: number;
+    currentDelay: number;
+    filterText: string;
+}
+
+export interface ExpenseJobs {
+    [profileName: string]: ExpenseJobState;
+}
+// --- EXPENSE INTERFACES END ---
+
 
 export interface Profile {
   profileName: string;
@@ -72,7 +118,7 @@ export interface Profile {
     moduleApiName: string;
   };
 }
-// ... (All other interfaces like TicketFormData, InvoiceFormData, etc. are unchanged) ...
+// ... (All other existing interfaces like TicketFormData, InvoiceFormData, etc. are retained) ...
 export interface TicketFormData {
   emails: string;
   subject: string;
@@ -230,7 +276,7 @@ export interface InvoiceJobState {
   isProcessing: boolean;
   isPaused: boolean;
   isComplete: boolean;
-  processingStartTime: Date | null;
+  processingStartTime: null;
   processingTime: number; 
   totalToProcess: number;
   countdown: number;
@@ -326,7 +372,7 @@ export interface WebinarResult {
   fullResponse?: any;
   displayName?: string;
   subject?: string;
-  number?: number; // <-- ADDED
+  number?: number; 
 }
 export interface WebinarJobState {
     formData: WebinarFormData; 
@@ -345,7 +391,28 @@ export interface WebinarJobs {
     [profileName: string]: WebinarJobState;
 }
 
-// ... (All createInitial...State functions are unchanged) ...
+// --- EXPENSE INITIAL STATE (NEW) ---
+const createInitialExpenseJobState = (): ExpenseJobState => ({
+    formData: {
+        selectedModuleApiName: "",
+        moduleFields: [],
+        bulkIteratingFields: [],
+        bulkDefaultData: {},
+        bulkDelay: 1,
+        waitAndInspect: false,
+    },
+    results: [],
+    isProcessing: false,
+    isPaused: false,
+    isComplete: false,
+    processingStartTime: null,
+    processingTime: 0,
+    totalToProcess: 0,
+    countdown: 0,
+    currentDelay: 1,
+    filterText: '',
+});
+// ... (All other createInitial...State functions are unchanged) ...
 const createInitialJobState = (): JobState => ({
   formData: {
     emails: '',
@@ -539,6 +606,8 @@ const MainApp = () => {
     const [creatorJobs, setCreatorJobs] = useState<CreatorJobs>({});
     const [projectsJobs, setProjectsJobs] = useState<ProjectsJobs>({});
     const [webinarJobs, setWebinarJobs] = useState<WebinarJobs>({});
+    const [expenseJobs, setExpenseJobs] = useState<ExpenseJobs>({});
+    
     const socketRef = useRef<Socket | null>(null);
     const queryClient = useQueryClient();
 
@@ -554,6 +623,7 @@ const MainApp = () => {
     useJobTimer(creatorJobs, setCreatorJobs, 'creator');
     useJobTimer(projectsJobs, setProjectsJobs, 'projects');
     useJobTimer(webinarJobs, setWebinarJobs, 'webinar');
+    useJobTimer(expenseJobs, setExpenseJobs, 'expense');
 
     useEffect(() => {
         const socket = io(SERVER_URL);
@@ -563,7 +633,7 @@ const MainApp = () => {
             toast({ title: "Connected to server!" });
         });
         
-        // ... (All other socket.on listeners are unchanged) ...
+        // ... (Existing socket.on listeners for ticketResult, ticketUpdate, invoiceResult, etc.) ...
         socket.on('ticketResult', (result: TicketResult & { profileName: string }) => {
           setJobs(prevJobs => {
             const profileJob = prevJobs[result.profileName] || createInitialJobState();
@@ -700,7 +770,7 @@ const MainApp = () => {
             
             const newResult = {
                 ...result,
-                number: profileJob.results.length + 1 // Add the number
+                number: profileJob.results.length + 1 
             };
             const newResults = [newResult, ...profileJob.results]; 
 
@@ -716,8 +786,49 @@ const MainApp = () => {
           });
         });
 
+        // --- NEW EXPENSE LISTENERS ---
+        socket.on('expenseResult', (result: ExpenseResult & { profileName: string }) => {
+          setExpenseJobs(prevJobs => {
+            const profileJob = prevJobs[result.profileName] || createInitialExpenseJobState();
+            const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
+            return {
+              ...prevJobs,
+              [result.profileName]: {
+                ...profileJob,
+                results: [result, ...profileJob.results], // Prepend for LIFO view
+                countdown: isLast ? 0 : profileJob.currentDelay,
+              }
+            };
+          });
+        });
+        
+        // Listener for the Desk-like Polling update (Wait & Inspect Log)
+        socket.on('expenseUpdate', (updateData: ExpenseResult & { profileName: string }) => {
+          setExpenseJobs(prevJobs => {
+            if (!prevJobs[updateData.profileName]) return prevJobs;
+            return {
+              ...prevJobs,
+              [updateData.profileName]: {
+                ...prevJobs[updateData.profileName],
+                results: prevJobs[updateData.profileName].results.map(r => 
+                  // Match using the temporary recordId from the first result event
+                  r.recordId === updateData.recordId ? 
+                    { 
+                        ...r, 
+                        success: updateData.success, 
+                        details: updateData.details, 
+                        finalStatus: updateData.finalStatus,
+                        fullResponse: updateData.fullResponse 
+                    } : r
+                )
+              }
+            }
+          });
+        });
+        // --- END NEW EXPENSE LISTENERS ---
 
-        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar'}, title: string, description: string, variant?: "destructive") => {
+
+        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar' | 'expense'}, title: string, description: string, variant?: "destructive") => {
             const { profileName, jobType } = data;
             
             const getInitialState = (type: string) => {
@@ -731,6 +842,7 @@ const MainApp = () => {
                     case 'creator': return createInitialCreatorJobState();
                     case 'projects': return createInitialProjectsJobState();
                     case 'webinar': return createInitialWebinarJobState();
+                    case 'expense': return createInitialExpenseJobState(); 
                     default: return {} as any;
                 }
             };
@@ -758,6 +870,7 @@ const MainApp = () => {
             else if (jobType === 'creator') setCreatorJobs(updater);
             else if (jobType === 'projects') setProjectsJobs(updater);
             else if (jobType === 'webinar') setWebinarJobs(updater);
+            else if (jobType === 'expense') setExpenseJobs(updater); 
             
             toast({ title, description, variant });
         };
@@ -1005,12 +1118,15 @@ const MainApp = () => {
                         }
                     />
 
-                    {/* --- ADDED --- */}
+                    {/* --- ExpenseStatus will now render the bulk dashboard --- */}
                     <Route
                         path="/expense-status"
                         element={
                             <ExpenseStatus
+                                jobs={expenseJobs}
+                                setJobs={setExpenseJobs}
                                 socket={socketRef.current}
+                                createInitialJobState={createInitialExpenseJobState}
                                 onAddProfile={handleOpenAddProfile}
                                 onEditProfile={handleOpenEditProfile}
                                 onDeleteProfile={handleDeleteProfile}

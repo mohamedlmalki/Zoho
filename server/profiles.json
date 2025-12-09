@@ -33,7 +33,9 @@
     },
     "meeting": {
       "zsoid": ""
-    }
+    },
+    "accessToken": "1000.211ca2c6c29aa7d4116ff5e58fa52c37.448f0c31252c7326c8bc43a56981f869",
+    "tokenExpiry": null
   },
   {
     "profileName": "2",
@@ -573,7 +575,9 @@
     },
     "meeting": {
       "zsoid": ""
-    }
+    },
+    "accessToken": "1000.85e4e99c39531d3cd5635337aafc7652.471335673735818e483fa2c62e720ee4",
+    "tokenExpiry": null
   },
   {
     "profileName": "creator 2 2K",
