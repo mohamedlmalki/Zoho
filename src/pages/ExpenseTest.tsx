@@ -1,16 +1,20 @@
+// --- FILE: src/pages/ExpenseTest.tsx ---
+
 import React, { useState, useEffect } from 'react';
-// Using @ alias for imports to match project configuration
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Receipt, Play, TerminalSquare, AlertCircle, CheckCircle2, Loader2, RefreshCw, Wallet } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { AlertCircle, CheckCircle2, Loader2, Play, Database, List } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { Profile } from '@/App';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery } from "@tanstack/react-query";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 
 const SERVER_URL = "http://localhost:3000";
 
@@ -21,130 +25,122 @@ interface ExpenseTestProps {
     onDeleteProfile: (profileName: string) => void;
 }
 
+interface ExpenseField {
+    label: string;
+    api_name: string;
+    data_type: string;
+    is_mandatory: boolean;
+    is_system: boolean;
+    is_read_only: boolean;
+}
+
+interface ResultLog {
+    value: string;
+    success: boolean;
+    message: string;
+    id?: string;
+}
+
 const ExpenseTest: React.FC<ExpenseTestProps> = ({ socket, onAddProfile, onEditProfile, onDeleteProfile }) => {
     // 1. Fetch Profiles
-    const { 
-        data: profiles = [], 
-        isLoading: isLoadingProfiles, 
-        isError, 
-        error,
-        refetch 
-    } = useQuery<Profile[]>({
+    const { data: profiles = [], isLoading: isLoadingProfiles, refetch } = useQuery<Profile[]>({
         queryKey: ['profiles'],
         queryFn: async () => {
-            const response = await fetch(`${SERVER_URL}/api/profiles`);
-            if (!response.ok) throw new Error(`Server returned ${response.status}`);
-            return response.json();
+            const res = await fetch(`${SERVER_URL}/api/profiles`);
+            return res.json();
         },
     });
 
     const [selectedProfileName, setSelectedProfileName] = useState<string>('');
-    const [isRunning, setIsRunning] = useState(false);
-    const [logs, setLogs] = useState<string[]>([]);
-    const [result, setResult] = useState<{ success: boolean; message: string; fullResponse?: any } | null>(null);
+    const [moduleName, setModuleName] = useState('cm_testmodule');
+    
+    // Fields State
+    const [fields, setFields] = useState<ExpenseField[]>([]);
+    const [loadingFields, setLoadingFields] = useState(false);
+    const [selectedField, setSelectedField] = useState<string>(''); // API name of the field to bulk insert
+    
+    // Bulk State
+    const [bulkValues, setBulkValues] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [statusMessage, setStatusMessage] = useState('');
+    const [results, setResults] = useState<ResultLog[]>([]);
+    const [error, setError] = useState<string | null>(null);
 
-    // --- New State for Accounts ---
-    const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
-    const [selectedAccount, setSelectedAccount] = useState<string>('');
-    const [accountError, setAccountError] = useState<string | null>(null); // NEW: Track account errors
-
-    // 2. Auto-select profile
+    // Auto-select profile
     useEffect(() => {
-        if (profiles.length > 0 && !selectedProfileName) {
-            setSelectedProfileName(profiles[0].profileName);
-        }
-        if (profiles.length > 0 && selectedProfileName && !profiles.find(p => p.profileName === selectedProfileName)) {
-            setSelectedProfileName(profiles[0].profileName);
-        }
+        if (profiles.length > 0 && !selectedProfileName) setSelectedProfileName(profiles[0].profileName);
     }, [profiles, selectedProfileName]);
 
     const selectedProfile = profiles.find(p => p.profileName === selectedProfileName) || null;
 
-    // 3. Socket Listeners (Results & Accounts)
+    // Socket Listeners
     useEffect(() => {
         if (!socket) return;
 
-        const handleUpdate = (data: { message: string }) => {
-            setLogs(prev => [...prev, data.message]);
-        };
+        socket.on('expenseFieldsFetched', (fetchedFields: ExpenseField[]) => {
+            setFields(fetchedFields);
+            setLoadingFields(false);
+            // Auto-select the first mandatory text field if available
+            const bestField = fetchedFields.find(f => f.is_mandatory && !f.is_system && f.data_type === 'text');
+            if (bestField) setSelectedField(bestField.api_name);
+        });
 
-        const handleResult = (data: { success: boolean; message: string; fullResponse?: any }) => {
-            setIsRunning(false);
-            setResult(data);
-            setLogs(prev => [...prev, data.success ? "--- TEST PASSED ---" : "--- TEST FAILED ---"]);
-        };
+        socket.on('expenseError', (data) => {
+            setError(data.message);
+            setLoadingFields(false);
+            setIsProcessing(false);
+        });
 
-        // NEW: Handle Account List
-        const handleAccountsFetched = (data: { id: string; name: string }[]) => {
-            console.log("[ExpenseTest] 📥 Received 'expenseAccountsFetched':", data);
-            setAccounts(data);
-            setLoadingAccounts(false);
-            setAccountError(null); // Clear errors on success
-        };
+        socket.on('expenseBulkUpdate', (data) => {
+            setStatusMessage(data.message);
+            if (data.progress) setProgress(data.progress);
+            if (data.progress === 100) setIsProcessing(false);
+        });
 
-        // NEW: Handle Errors explicitly
-        const handleExpenseError = (data: { message: string, fullResponse?: any }) => {
-            console.error("[ExpenseTest] 💥 Received 'expenseError':", data);
-            setAccountError(data.message);
-            setLoadingAccounts(false);
-            setAccounts([]);
-        };
-
-        socket.on('expenseTestUpdate', handleUpdate);
-        socket.on('expenseTestResult', handleResult);
-        socket.on('expenseAccountsFetched', handleAccountsFetched);
-        socket.on('expenseError', handleExpenseError);
+        socket.on('expenseBulkResult', (data) => {
+            setResults(prev => [{
+                value: data.value,
+                success: data.success,
+                message: data.message,
+                id: data.recordId
+            }, ...prev]);
+        });
 
         return () => {
-            socket.off('expenseTestUpdate', handleUpdate);
-            socket.off('expenseTestResult', handleResult);
-            socket.off('expenseAccountsFetched', handleAccountsFetched);
-            socket.off('expenseError', handleExpenseError);
+            socket.off('expenseFieldsFetched');
+            socket.off('expenseError');
+            socket.off('expenseBulkUpdate');
+            socket.off('expenseBulkResult');
         };
     }, [socket]);
 
-    // 4. Trigger Account Fetch when Profile Changes
-    useEffect(() => {
-        if (selectedProfile && socket) {
-            console.log("[ExpenseTest] 🔄 Profile changed to:", selectedProfile.profileName);
-            setLoadingAccounts(true);
-            setAccounts([]); 
-            setSelectedAccount('');
-            setAccountError(null);
-            console.log("[ExpenseTest] 📡 Emitting 'getExpenseAccounts'...");
-            socket.emit('getExpenseAccounts', { selectedProfileName: selectedProfile.profileName });
-        }
-    }, [selectedProfile, socket]);
+    const handleFetchFields = () => {
+        if (!socket || !selectedProfileName) return;
+        setLoadingFields(true);
+        setError(null);
+        setFields([]);
+        socket.emit('getExpenseFields', { selectedProfileName, moduleName });
+    };
 
-
-    const handleRunTest = () => {
-        if (!socket || !selectedProfile) {
-            alert("No profile selected or not connected to server.");
-            return;
-        }
-        setIsRunning(true);
-        setLogs(["Starting test sequence..."]);
-        setResult(null);
-
-        socket.emit('testExpenseCustomModule', {
-            selectedProfileName: selectedProfile.profileName
+    const handleStartBulk = () => {
+        if (!socket || !selectedProfileName || !selectedField || !bulkValues.trim()) return;
+        
+        setIsProcessing(true);
+        setResults([]);
+        setProgress(0);
+        setStatusMessage("Starting bulk operation...");
+        
+        socket.emit('startBulkExpenseCreation', {
+            selectedProfileName,
+            moduleName,
+            primaryFieldName: selectedField,
+            bulkValues,
+            defaultData: {} // Could be expanded later
         });
     };
 
-    if (isLoadingProfiles) {
-        return <div className="flex h-screen items-center justify-center gap-2"><Loader2 className="h-8 w-8 animate-spin" /> Loading Profiles...</div>;
-    }
-
-    if (isError) {
-        return (
-            <div className="flex h-screen flex-col items-center justify-center gap-4">
-                <AlertCircle className="h-12 w-12 text-red-500" />
-                <h2 className="text-xl font-bold text-red-600">Failed to Load Profiles</h2>
-                <Button onClick={() => refetch()} variant="outline"><RefreshCw className="mr-2 h-4 w-4" /> Try Again</Button>
-            </div>
-        );
-    }
+    if (isLoadingProfiles) return <div className="p-10"><Loader2 className="animate-spin" /> Loading...</div>;
 
     return (
         <DashboardLayout
@@ -159,123 +155,163 @@ const ExpenseTest: React.FC<ExpenseTestProps> = ({ socket, onAddProfile, onEditP
             jobs={{}} 
             onEditProfile={onEditProfile}
             onDeleteProfile={onDeleteProfile}
-            service="inventory" 
+            service="expense" 
         >
-            <div className="grid gap-6">
-                {profiles.length === 0 ? (
-                    <Alert variant="destructive" className="border-orange-200 bg-orange-50 text-orange-800">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>No Profiles Found</AlertTitle>
-                        <AlertDescription>Add a Zoho Account to continue.</AlertDescription>
-                    </Alert>
-                ) : (
-                    <>
-                        {/* --- NEW CARD: SELECT ACCOUNT --- */}
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 bg-blue-100 rounded-lg dark:bg-blue-900/20">
-                                        <Wallet className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                                    </div>
-                                    <div>
-                                        <CardTitle>Expense Accounts (Paid Through)</CardTitle>
-                                        <CardDescription>
-                                            Fetches valid "Paid Through" accounts from Zoho Expense for this profile.
-                                        </CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex flex-col gap-2 max-w-sm">
-                                    <Label>Select Account</Label>
-                                    <Select 
-                                        value={selectedAccount} 
-                                        onValueChange={setSelectedAccount}
-                                        disabled={loadingAccounts || accounts.length === 0}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder={loadingAccounts ? "Loading accounts..." : "Select an account"} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {accounts.map(acc => (
-                                                <SelectItem key={acc.id} value={acc.id}>
-                                                    {acc.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    
-                                    {/* --- Error / Info Messages --- */}
-                                    {accountError && (
-                                        <div className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200 mt-2">
-                                            <strong>Error:</strong> {accountError}
-                                        </div>
-                                    )}
-                                    {accounts.length === 0 && !loadingAccounts && !accountError && (
-                                        <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 mt-2">
-                                            No 'Paid Through' accounts found for this profile. 
-                                            <br/>
-                                            Check your Zoho Expense settings or try a different profile.
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-100px)]">
+                
+                {/* --- LEFT COLUMN: CONFIGURATION --- */}
+                <Card className="md:col-span-1 flex flex-col h-full border-l-4 border-l-blue-500">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Database className="h-5 w-5 text-blue-500" />
+                            Configuration
+                        </CardTitle>
+                        <CardDescription>Setup your bulk job</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4 flex-1 overflow-hidden">
+                        
+                        {/* Module Name Input */}
+                        <div className="space-y-2">
+                            <Label>Module API Name</Label>
+                            <div className="flex gap-2">
+                                <Input 
+                                    value={moduleName} 
+                                    onChange={(e) => setModuleName(e.target.value)} 
+                                    placeholder="e.g. cm_testmodule"
+                                />
+                                <Button size="icon" onClick={handleFetchFields} disabled={loadingFields}>
+                                    {loadingFields ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                        </div>
 
-                        {/* --- EXISTING CARD: CUSTOM MODULE TEST --- */}
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 bg-green-100 rounded-lg dark:bg-green-900/20">
-                                        <Receipt className="h-6 w-6 text-green-600 dark:text-green-400" />
-                                    </div>
-                                    <div>
-                                        <CardTitle>Zoho Expense Custom Module Test</CardTitle>
-                                        <CardDescription>
-                                            Automated verification of Deluge scripts.
-                                        </CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex flex-col gap-4">
-                                    <div className="flex gap-4">
-                                        <Button 
-                                            onClick={handleRunTest} 
-                                            disabled={isRunning || !selectedProfile?.expense?.orgId} 
-                                            className="w-full md:w-auto self-start"
-                                        >
-                                            {isRunning ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running...</> : <><Play className="mr-2 h-4 w-4" />Run Integration Test</>}
-                                        </Button>
-                                    </div>
-                                    
-                                    {!selectedProfile?.expense?.orgId && (
-                                        <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <span>Zoho Expense Org ID is missing.</span>
-                                        </div>
-                                    )}
+                        {error && (
+                            <Alert variant="destructive" className="py-2">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>Error</AlertTitle>
+                                <AlertDescription>{error}</AlertDescription>
+                            </Alert>
+                        )}
 
-                                    <div className="mt-4 rounded-md border bg-muted p-4 font-mono text-sm">
-                                        <ScrollArea className="h-[200px]">
-                                            {logs.length === 0 ? <span className="text-muted-foreground/50 italic">Ready to start...</span> : logs.map((log, i) => <div key={i} className="mb-1">{log}</div>)}
-                                        </ScrollArea>
+                        {/* Fields List */}
+                        <div className="flex-1 border rounded-md overflow-hidden flex flex-col">
+                            <div className="bg-muted p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b">
+                                Available Fields
+                            </div>
+                            <ScrollArea className="flex-1 p-2">
+                                {fields.length === 0 ? (
+                                    <div className="text-center text-sm text-muted-foreground py-8">
+                                        Click refresh to load fields
                                     </div>
-                                    
-                                    {result && (
-                                        <Alert variant={result.success ? "default" : "destructive"}>
-                                            <AlertTitle>{result.success ? "Passed" : "Failed"}</AlertTitle>
-                                            <AlertDescription>{result.message}</AlertDescription>
-                                        </Alert>
-                                    )}
+                                ) : (
+                                    <div className="space-y-1">
+                                        {fields.map((field) => (
+                                            <div 
+                                                key={field.api_name}
+                                                onClick={() => !field.is_read_only && setSelectedField(field.api_name)}
+                                                className={`
+                                                    p-2 rounded text-sm cursor-pointer flex items-center justify-between border
+                                                    ${selectedField === field.api_name 
+                                                        ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300 dark:bg-blue-900/20' 
+                                                        : 'hover:bg-accent border-transparent'}
+                                                    ${field.is_read_only ? 'opacity-50 cursor-not-allowed' : ''}
+                                                `}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{field.label}</span>
+                                                    <span className="text-xs text-muted-foreground font-mono">{field.api_name}</span>
+                                                </div>
+                                                <div className="flex gap-1">
+                                                    {field.is_mandatory && <Badge variant="destructive" className="text-[10px] h-4 px-1">Req</Badge>}
+                                                    <Badge variant="outline" className="text-[10px] h-4 px-1">{field.data_type}</Badge>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </ScrollArea>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* --- RIGHT COLUMN: EXECUTION --- */}
+                <Card className="md:col-span-2 flex flex-col h-full border-l-4 border-l-green-500">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <List className="h-5 w-5 text-green-500" />
+                            Bulk Data Entry
+                        </CardTitle>
+                        <CardDescription>
+                            Target Field: <Badge variant="secondary">{selectedField || 'None Selected'}</Badge>
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4 flex-1 overflow-hidden">
+                        
+                        <div className="space-y-2">
+                            <Label>Bulk Values (One per line)</Label>
+                            <Textarea 
+                                className="font-mono text-sm h-[150px]" 
+                                placeholder="Value 1&#10;Value 2&#10;Value 3"
+                                value={bulkValues}
+                                onChange={(e) => setBulkValues(e.target.value)}
+                                disabled={isProcessing}
+                            />
+                            <div className="text-xs text-muted-foreground text-right">
+                                {bulkValues.split('\n').filter(l => l.trim()).length} records to create
+                            </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        {isProcessing && (
+                            <div className="space-y-1 animate-in fade-in">
+                                <div className="flex justify-between text-sm">
+                                    <span>{statusMessage}</span>
+                                    <span>{progress}%</span>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </>
-                )}
+                                <Progress value={progress} className="h-2" />
+                            </div>
+                        )}
+
+                        {/* Action Button */}
+                        <Button 
+                            className="w-full bg-green-600 hover:bg-green-700" 
+                            onClick={handleStartBulk}
+                            disabled={!selectedField || !bulkValues.trim() || isProcessing}
+                        >
+                            {isProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : <><Play className="mr-2 h-4 w-4" /> Start Bulk Creation</>}
+                        </Button>
+
+                        {/* Results Log */}
+                        <div className="flex-1 border rounded-md overflow-hidden flex flex-col mt-2">
+                            <div className="bg-muted p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b flex justify-between">
+                                <span>Execution Log</span>
+                                {results.length > 0 && <span>{results.filter(r => r.success).length} Success / {results.filter(r => !r.success).length} Failed</span>}
+                            </div>
+                            <ScrollArea className="flex-1 p-2 bg-slate-50 dark:bg-slate-950">
+                                {results.length === 0 ? (
+                                    <div className="text-center text-sm text-muted-foreground py-10 opacity-50">
+                                        Results will appear here...
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {results.map((res, i) => (
+                                            <div key={i} className={`text-sm p-2 rounded border flex items-start gap-2 ${res.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                                {res.success ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+                                                <div className="flex-1 grid gap-1">
+                                                    <div className="font-semibold">{res.value}</div>
+                                                    <div className="text-xs opacity-90 break-all">{res.message}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </ScrollArea>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         </DashboardLayout>
     );
 };
-
+import { RefreshCw } from 'lucide-react'; // Added missing import
 export default ExpenseTest;

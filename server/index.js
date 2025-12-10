@@ -1,3 +1,5 @@
+// --- FILE: server/index.js ---
+
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -453,7 +455,24 @@ io.on('connection', (socket) => {
     const meetingListeners = { 'fetchWebinars': meetingHandler.handleGetWebinars, 'startBulkRegistration': meetingHandler.handleStartBulkRegistration };
     for (const [event, handler] of Object.entries(meetingListeners)) { socket.on(event, (data) => { const profiles = readProfiles(); const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null; if (activeProfile) { if (typeof handler === 'function') { handler(socket, { ...data, activeProfile }); } else { console.error(`[ERROR] Handler for event '${event}' is not a function.`); socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` }); } } else { socket.emit('bulkError', { message: 'Active profile not found.' }); } }); }
 
-    // --- UPDATED: Zoho Expense Listeners ---
+    // --- UPDATED: Zoho Expense Listeners (Smart Dashboard) ---
+    
+    // 1. Get Fields for Sidebar
+    socket.on('getExpenseFields', (data) => {
+         expenseHandler.handleGetExpenseFields(socket, data);
+    });
+
+    // 2. Single Record Creation
+    socket.on('createExpenseRecord', (data) => {
+         expenseHandler.handleCreateExpenseRecord(socket, data);
+    });
+
+    // 3. Start Bulk Creation
+    socket.on('startBulkExpenseCreation', (data) => {
+         expenseHandler.handleStartBulkExpenseCreation(socket, data);
+    });
+
+    // 4. Old Test Handler (For backward compatibility if needed)
     socket.on('testExpenseCustomModule', (data) => {
          const profiles = readProfiles();
          const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
@@ -463,13 +482,6 @@ io.on('connection', (socket) => {
              socket.emit('expenseTestResult', { success: false, message: 'Profile not found.' });
          }
     });
-
-    // --- LOGGED LISTENER ---
-    socket.on('getExpenseAccounts', (data) => {
-        console.log("[Socket] 📩 Received 'getExpenseAccounts' for:", data.selectedProfileName);
-        expenseHandler.handleGetExpenseAccounts(socket, data);
-    });
-    // ------------------------------------
 });
 
 

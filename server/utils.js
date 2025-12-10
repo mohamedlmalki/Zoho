@@ -1,4 +1,4 @@
-// --- FILE: server/utils.js (MODIFIED) ---
+// --- FILE: server/utils.js ---
 
 const fs = require('fs');
 const path = require('path');
@@ -54,75 +54,22 @@ const writeToTicketLog = (newEntry) => {
 const createJobId = (socketId, profileName, jobType) => `${socketId}_${profileName}_${jobType}`;
 
 const parseError = (error) => {
-    console.error("\n--- ZOHO API ERROR ---");
+    console.error("\n--- 🛑 ZOHO API ERROR LOG 🛑 ---");
     if (error.response) {
-        console.error("Status:", error.response.status);
-        console.error("Status Text:", error.response.statusText);
-        console.error("Response Data:", JSON.stringify(error.response.data, null, 2));
-    } else if (error.request) {
-        console.error("Request Error:", "No response received from Zoho API.");
-        console.error(error.message);
+        console.error(`Status: ${error.response.status} ${error.response.statusText}`);
+        console.error("URL:", error.config?.url);
+        console.error("Data:", JSON.stringify(error.response.data, null, 2));
     } else {
-        console.error("Generic Error:", error.message);
+        console.error("Error Message:", error.message);
     }
-    console.error("--------------------\n");
+    console.error("------------------------------\n");
 
     if (error.response) {
-        // Handle Creator's specific error structures
-        if (error.response.data?.code && error.response.data?.description) {
-             return {
-                message: error.response.data.description,
-                fullResponse: error.response.data
-            };
-        }
-        // --- ADDED: Handle Meeting's error structure ---
-        if (error.response.data?.error?.message) {
-             return {
-                message: error.response.data.error.message,
-                fullResponse: error.response.data
-            };
-        }
-        // ---
-        if (error.response.data?.result?.[0]?.error?.message) {
-             return {
-                message: error.response.data.result[0].error.message,
-                fullResponse: error.response.data
-            };
-        }
-        if (error.response.data?.response?.errors?.error?.message) {
-             return {
-                message: error.response.data.response.errors.error.message,
-                fullResponse: error.response.data
-            };
-        }
-        if (error.response.data && error.response.data.message) {
-            return {
-                message: error.response.data.message,
-                fullResponse: error.response.data
-            };
-        }
-        if (typeof error.response.data === 'string' && error.response.data.includes('<title>')) {
-            const titleMatch = error.response.data.match(/<title>(.*?)<\/title>/);
-            const title = titleMatch ? titleMatch[1] : 'HTML Error Page Received';
-            return {
-                message: `Zoho Server Error: ${title}`,
-                fullResponse: error.response.data
-            };
-        }
-        return {
-            message: `HTTP Error ${error.response.status}: ${error.response.statusText}`,
-            fullResponse: error.response.data || error.response.statusText
-        };
-    } else if (error.request) {
-        return {
-            message: 'Network Error: No response received from Zoho API.',
-            fullResponse: error.message
-        };
+        if (error.response.data?.message) return { message: error.response.data.message, fullResponse: error.response.data };
+        if (error.response.data?.code) return { message: `Code ${error.response.data.code}: ${error.response.data.message || 'Unknown Error'}`, fullResponse: error.response.data };
+        return { message: `HTTP ${error.response.status}: ${error.response.statusText}`, fullResponse: error.response.data };
     }
-    return {
-        message: error.message || 'An unknown error occurred.',
-        fullResponse: error.stack
-    };
+    return { message: error.message || 'Network/Unknown Error', fullResponse: error.stack };
 };
 
 const getValidAccessToken = async (profile, service) => {
@@ -133,7 +80,6 @@ const getValidAccessToken = async (profile, service) => {
         return tokenCache[cacheKey].data;
     }
     
-    // --- FIX #1: Added 'meeting' scopes ---
     const scopes = {
         desk: 'Desk.tickets.ALL,Desk.settings.ALL,Desk.basic.READ',
         inventory: 'ZohoInventory.contacts.ALL,ZohoInventory.invoices.ALL,ZohoInventory.settings.ALL',
@@ -147,10 +93,9 @@ const getValidAccessToken = async (profile, service) => {
             'ZohoProjects.tasklists.ALL',
             'ZohoProjects.tasks.ALL',
         ].join(','),
-        // --- ADDED THIS LINE based on your docs ---
-        meeting: 'ZohoMeeting.manageOrg.READ,ZohoMeeting.webinar.READ,ZohoMeeting.webinar.DELETE,ZohoMeeting.webinar.UPDATE,ZohoMeeting.webinar.CREATE,ZohoMeeting.user.READ'
+        meeting: 'ZohoMeeting.manageOrg.READ,ZohoMeeting.webinar.READ,ZohoMeeting.webinar.DELETE,ZohoMeeting.webinar.UPDATE,ZohoMeeting.webinar.CREATE,ZohoMeeting.user.READ',
+        expense: 'ZohoExpense.fullaccess.ALL'
     };
-    // --- END FIX ---
     
     const requiredScope = scopes[service];
     if (!requiredScope) {
@@ -195,8 +140,7 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     }
 
     const serviceConfig = profile[service];
-    // --- FIX #2: Added 'meeting' to the list of services that don't need config ---
-    if (!serviceConfig && service !== 'qntrl' && service !== 'people' && service !== 'meeting') {
+    if (!serviceConfig && service !== 'qntrl' && service !== 'people' && service !== 'meeting' && service !== 'expense') {
          throw new Error(`Configuration for service "${service}" is missing in profile "${profile.profileName}".`);
     }
 
@@ -209,7 +153,6 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
         fullUrl = `https://${serviceConfig.baseUrl}/creator/v2.1${relativeUrl}`;
     } 
     else {
-        // --- FIX #3: Added 'meeting' base URL ---
         const baseUrls = {
             desk: 'https://desk.zoho.com',
             inventory: 'https://www.zohoapis.com/inventory',
@@ -217,10 +160,10 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
             qntrl: 'https://coreapi.qntrl.com',
             people: 'https://people.zoho.com',
             projects: 'https://projectsapi.zoho.com/api/v3',
-            // --- ADDED THIS LINE ---
-            meeting: 'https://meeting.zoho.com'
+            meeting: 'https://meeting.zoho.com',
+            // ✅ MATCHING SERVER.JS EXACTLY:
+            expense: 'https://www.zohoapis.com/expense/v1' 
         };
-        // --- END FIX ---
         
         const baseUrl = baseUrls[service];
         if (!baseUrl) {
@@ -242,10 +185,15 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     if (service === 'inventory' && profile.inventory?.orgId) {
         params.organization_id = profile.inventory.orgId;
     }
+
+    // ✅ MATCHING SERVER.JS: Send Org ID in Params AND Headers
+    if (service === 'expense' && profile.expense?.orgId) {
+        params.organization_id = profile.expense.orgId;
+        headers['X-com-zoho-expense-organizationid'] = profile.expense.orgId;
+    }
     
     let requestData = data;
-    // --- MODIFIED: Handle JSON for meeting POST as well ---
-    if ( (service === 'creator' || service === 'meeting') && (method.toLowerCase() === 'post' || method.toLowerCase() === 'patch')) {
+    if ( (service === 'creator' || service === 'meeting' || service === 'expense') && (method.toLowerCase() === 'post' || method.toLowerCase() === 'patch' || method.toLowerCase() === 'put')) {
         headers['Content-Type'] = 'application/json';
         requestData = data; 
     }
@@ -279,7 +227,6 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     
     return axios(axiosConfig);
 };
-
 
 module.exports = {
     readProfiles,

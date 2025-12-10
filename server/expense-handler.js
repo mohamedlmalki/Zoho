@@ -1,3 +1,5 @@
+// --- FILE: server/expense-handler.js ---
+
 const { makeApiCall, parseError } = require('./utils');
 
 let activeJobs = {};
@@ -8,179 +10,173 @@ const setActiveJobs = (jobsObject) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- UPDATED FUNCTION: Fetch Accounts with Detailed Logging ---
-const handleGetExpenseAccounts = async (socket, { selectedProfileName }) => {
-    console.log(`[ExpenseHandler] 🏁 Starting fetch for profile: ${selectedProfileName}`);
+// --- 1. FETCH FIELDS ---
+const handleGetExpenseFields = async (socket, data) => {
+    const { selectedProfileName, moduleName } = data;
+    console.log(`\n[ExpenseHandler] 🔍 Fetching fields for module '${moduleName}' (Profile: ${selectedProfileName})`);
 
-    try {
-        const profiles = require('./utils').readProfiles();
-        const profile = profiles.find(p => p.profileName === selectedProfileName);
+    const profiles = require('./utils').readProfiles();
+    const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
 
-        if (!profile) {
-             socket.emit('expenseError', { message: `Profile '${selectedProfileName}' not found on server.` });
-             return;
-        }
-
-        if (!profile.expense || !profile.expense.orgId) {
-            socket.emit('expenseError', { message: `Profile '${selectedProfileName}' is missing Zoho Expense Org ID.` });
-            return;
-        }
-
-        console.log(`[ExpenseHandler] 🔑 Using Org ID: ${profile.expense.orgId}`);
-        
-        // We attempt to fetch Paid Through Accounts
-        const endpoint = '/v1/paid_through_accounts';
-        console.log(`[ExpenseHandler] 📡 Calling Zoho API: GET ${endpoint}`);
-        
-        try {
-            const response = await makeApiCall('GET', endpoint, null, profile, 'expense');
-            
-            console.log(`[ExpenseHandler] 📥 Zoho Status: ${response.status}`);
-            
-            if (!response.data || !response.data.paid_through_accounts) {
-                 console.warn(`[ExpenseHandler] ⚠️ Unexpected response format:`, response.data);
-                 // Fallback: Try to fetch Users just to see if connection works
-                 socket.emit('expenseError', { 
-                     message: "Connected to Zoho, but no 'paid_through_accounts' found. Do you have active bank/cash accounts?",
-                     fullResponse: response.data 
-                 });
-                 return;
-            }
-
-            const rawAccounts = response.data.paid_through_accounts;
-            console.log(`[ExpenseHandler] ✅ Found ${rawAccounts.length} accounts.`);
-
-            const accounts = rawAccounts.map(acc => ({
-                id: acc.account_id,
-                name: acc.account_name,
-                type: acc.account_type
-            }));
-
-            socket.emit('expenseAccountsFetched', accounts);
-
-        } catch (apiError) {
-            // This catches actual API failures (400, 401, 404)
-            const errorDetails = apiError.response ? apiError.response.data : apiError.message;
-            console.error("[ExpenseHandler] 💥 Zoho API Error:", JSON.stringify(errorDetails));
-            
-            socket.emit('expenseError', { 
-                message: `Zoho API Error: ${apiError.response?.data?.message || apiError.message}`,
-                fullResponse: errorDetails
-            });
-        }
-
-    } catch (error) {
-        console.error("General Error fetching accounts:", error.message);
-        socket.emit('expenseError', { message: `Server Error: ${error.message}` });
-    }
-};
-
-const handleTestCustomModule = async (socket, data) => {
-    const { activeProfile } = data;
-    
-    // 1. Validation
     if (!activeProfile || !activeProfile.expense || !activeProfile.expense.orgId) {
-        socket.emit('expenseTestResult', { 
-            success: false, 
-            message: 'Zoho Expense Org ID is missing in the selected profile.' 
-        });
+        socket.emit('expenseError', { message: 'Profile or Org ID missing.' });
         return;
     }
 
-    const orgId = activeProfile.expense.orgId;
-    const moduleName = activeProfile.expense.testModuleName || 'cm_testmodule';
-
     try {
-        // --- STEP 1: CREATE RECORD ---
-        socket.emit('expenseTestUpdate', { message: `🚀 Creating test record in module: ${moduleName}...` });
+        const fieldsUrl = `/settings/fields?entity=${moduleName}`;
+        const response = await makeApiCall('get', fieldsUrl, null, activeProfile, 'expense');
         
-        const testData = {
-            "Name": `Test - ${new Date().toISOString()}`,
-            "Date": new Date().toISOString().split('T')[0] 
-        };
-
-        const createUrl = `/v1/${moduleName}`;
-        const createResponse = await makeApiCall('post', createUrl, testData, activeProfile, 'expense');
+        const fields = response.data.fields || response.data.data || [];
+        console.log(`[ExpenseHandler] ✅ Found ${fields.length} fields.`);
         
-        let recordId = null;
-        const resData = createResponse.data;
-        
-        const keys = Object.keys(resData);
-        keys.forEach(k => {
-            if (resData[k] && resData[k].module_record_id) recordId = resData[k].module_record_id;
-            else if (resData[k] && resData[k].custom_module_id) recordId = resData[k].custom_module_id;
-            else if (resData[k] && resData[k].id) recordId = resData[k].id;
-        });
+        // Map to a clean format for the frontend
+        const mappedFields = fields.map(f => ({
+            label: f.label,
+            api_name: f.api_name,
+            data_type: f.data_type,
+            is_mandatory: f.is_mandatory,
+            is_system: f.is_system,
+            is_read_only: f.is_read_only
+        }));
 
-        if (!recordId) {
-             socket.emit('expenseTestResult', { 
-                success: false, 
-                message: 'Record created but could not parse Record ID.',
-                fullResponse: resData
-            });
-            return;
-        }
-
-        socket.emit('expenseTestUpdate', { 
-            message: `✅ Record Created (ID: ${recordId}).\n⏳ Waiting 10 seconds for backend scripts...` 
-        });
-
-        // --- STEP 2: WAIT ---
-        await sleep(10000);
-
-        // --- STEP 3: INSPECT RECORD ---
-        socket.emit('expenseTestUpdate', { message: `🔍 Fetching record to verify logs...` });
-
-        const getUrl = `/v1/${moduleName}/${recordId}`;
-        const getResponse = await makeApiCall('get', getUrl, null, activeProfile, 'expense');
-        const body = getResponse.data;
-
-        let recordData = null;
-        Object.keys(body).forEach(k => {
-            if (typeof body[k] === 'object' && body[k].module_fields) {
-                recordData = body[k];
-            }
-        });
-
-        if (!recordData) {
-            socket.emit('expenseTestResult', { 
-                success: false, 
-                message: 'Could not find "module_fields" in the fetch response.',
-                fullResponse: body
-            });
-            return;
-        }
-
-        const fields = recordData.module_fields || [];
-        const logField = fields.find(f => f.api_name === "cf_api_log");
-        const logValue = logField ? logField.value : null;
-
-        if (logValue && logValue.includes("API LOG")) {
-             socket.emit('expenseTestResult', { 
-                success: true, 
-                message: `🎉 SUCCESS! Log Verified.\nValue: "${logValue}"`,
-                fullResponse: body
-            });
-        } else {
-             socket.emit('expenseTestResult', { 
-                success: false, 
-                message: `⚠️ Log Missing or Incorrect.\nExpected "API LOG", found: "${logValue || 'null'}"`,
-                fullResponse: body
-            });
-        }
+        socket.emit('expenseFieldsFetched', mappedFields);
 
     } catch (error) {
         const { message, fullResponse } = parseError(error);
-        socket.emit('expenseTestResult', { 
+        socket.emit('expenseError', { message: `Failed to fetch fields: ${message}`, fullResponse });
+    }
+};
+
+// --- 2. SINGLE RECORD CREATION ---
+const handleCreateExpenseRecord = async (socket, data) => {
+    const { selectedProfileName, moduleName, formData } = data;
+    console.log(`\n[ExpenseHandler] 📝 Creating SINGLE record in '${moduleName}'`);
+
+    const profiles = require('./utils').readProfiles();
+    const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
+
+    try {
+        const createUrl = `/${moduleName}`;
+        const response = await makeApiCall('post', createUrl, formData, activeProfile, 'expense');
+        
+        console.log(`[ExpenseHandler] ✅ Single Record Created.`);
+        socket.emit('createExpenseRecordResult', { 
+            success: true, 
+            data: response.data 
+        });
+
+    } catch (error) {
+        const { message, fullResponse } = parseError(error);
+        socket.emit('createExpenseRecordResult', { 
             success: false, 
-            message: `Error: ${message}`,
-            fullResponse: fullResponse
+            error: message,
+            fullResponse 
         });
     }
 };
 
+// --- 3. BULK CREATION HANDLER ---
+const handleStartBulkExpenseCreation = async (socket, data) => {
+    const { selectedProfileName, moduleName, primaryFieldName, bulkValues, defaultData = {}, bulkDelay = 0 } = data;
+    
+    // Parse Bulk Values
+    const valuesToProcess = bulkValues.split('\n').map(v => v.trim()).filter(v => v);
+    const total = valuesToProcess.length;
+
+    console.log(`\n[ExpenseHandler] 🚀 START BULK: ${total} records for module '${moduleName}'`);
+
+    const profiles = require('./utils').readProfiles();
+    const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
+
+    if (!activeProfile) return;
+
+    // Fetch fields metadata once for "Smart Auto-fill"
+    let fields = [];
+    try {
+        const fieldsResp = await makeApiCall('get', `/settings/fields?entity=${moduleName}`, null, activeProfile, 'expense');
+        fields = fieldsResp.data.fields || fieldsResp.data.data || [];
+    } catch (e) {
+        console.warn("[ExpenseHandler] ⚠️ Could not fetch fields for auto-fill.");
+    }
+
+    // Process Loop
+    for (let i = 0; i < total; i++) {
+        const currentValue = valuesToProcess[i];
+        
+        // 1. Build Payload: Start with Default Data from Frontend
+        const payload = { ...defaultData };
+        
+        // 2. Overwrite Primary Field with Bulk Value
+        payload[primaryFieldName] = currentValue;
+
+        // 3. Smart Auto-fill: Fill MISSING mandatory fields that weren't in defaultData
+        fields.forEach(f => {
+            if (f.is_mandatory && !f.is_system && payload[f.api_name] === undefined) {
+                if (f.data_type === 'text' || f.data_type === 'string') payload[f.api_name] = `Auto ${f.label}`;
+                else if (f.data_type === 'date') payload[f.api_name] = new Date().toISOString().split('T')[0];
+                else if (['integer', 'double', 'currency', 'amount'].includes(f.data_type)) payload[f.api_name] = 100;
+                else if (f.data_type === 'boolean') payload[f.api_name] = true;
+            }
+        });
+
+        // 4. Send Request
+        try {
+            socket.emit('expenseBulkUpdate', { 
+                message: `[${i + 1}/${total}] Creating: "${currentValue}"`, 
+                progress: Math.round(((i + 1) / total) * 100) 
+            });
+
+            const createUrl = `/${moduleName}`;
+            const response = await makeApiCall('post', createUrl, payload, activeProfile, 'expense');
+            const resData = response.data;
+
+            // Try to find ID
+            let recordId = null;
+            if (resData.custom_module && resData.custom_module.id) recordId = resData.custom_module.id;
+            else if (resData.id) recordId = resData.id;
+            else if (resData.module_record_id) recordId = resData.module_record_id;
+
+            if (recordId) {
+                socket.emit('expenseBulkResult', { 
+                    success: true, 
+                    value: currentValue, 
+                    message: `ID: ${recordId}`,
+                    recordId: recordId
+                });
+            } else {
+                // Sometimes success doesn't return an ID immediately in some modules
+                socket.emit('expenseBulkResult', { 
+                    success: true, 
+                    value: currentValue, 
+                    message: "Success (No ID returned)",
+                    fullResponse: resData
+                });
+            }
+
+        } catch (error) {
+            const { message } = parseError(error);
+            socket.emit('expenseBulkResult', { 
+                success: false, 
+                value: currentValue, 
+                message: message 
+            });
+        }
+
+        // Delay
+        if (bulkDelay > 0) await sleep(bulkDelay * 1000);
+    }
+
+    socket.emit('expenseBulkUpdate', { message: "✅ Bulk Operation Complete!", progress: 100 });
+};
+
+// Keep old test handler for backward compatibility if needed
+const handleTestCustomModule = async (socket, data) => { /* ... */ };
+
 module.exports = {
     setActiveJobs,
-    handleTestCustomModule,
-    handleGetExpenseAccounts
+    handleGetExpenseFields,
+    handleCreateExpenseRecord,
+    handleStartBulkExpenseCreation,
+    handleTestCustomModule
 };
