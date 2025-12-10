@@ -1,4 +1,3 @@
-// --- FILE: src/App.tsx ---
 import React, { useState, useEffect, useRef } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -28,6 +27,10 @@ import ProjectsTasksPage from './pages/ProjectsTasksPage';
 import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
 import LiveStats from '@/pages/LiveStats';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
+
+// --- IMPORT NEW PAGE ---
+import ExpenseTest from './pages/ExpenseTest'; 
+
 const queryClient = new QueryClient();
 const SERVER_URL = "http://localhost:3000";
 
@@ -65,6 +68,11 @@ export interface Profile {
   };
   meeting?: {
     zsoid?: string;
+  };
+  // --- ADDED: ZOHO EXPENSE SETTINGS ---
+  expense?: {
+    orgId: string;
+    testModuleName?: string;
   };
 }
 
@@ -185,7 +193,7 @@ export interface PeopleFormData {
   bulkPrimaryValues: string;
   bulkDefaultData: { [key: string]: string };
   bulkDelay: number;
-  stopAfterFailures: number; // --- ADDED THIS ---
+  stopAfterFailures: number;
 }
 export interface PeopleResult {
   email: string;
@@ -193,7 +201,7 @@ export interface PeopleResult {
   details?: string;
   error?: string;
   fullResponse?: any;
-  timestamp?: Date; // Added for consistency
+  timestamp?: Date;
 }
 export interface PeopleJobState {
     formData: PeopleFormData;
@@ -453,7 +461,7 @@ const createInitialPeopleJobState = (): PeopleJobState => ({
         bulkPrimaryValues: "",
         bulkDefaultData: {},
         bulkDelay: 1,
-        stopAfterFailures: 0, // --- ADDED THIS ---
+        stopAfterFailures: 0,
     },
     results: [],
     isProcessing: false,
@@ -597,9 +605,8 @@ const MainApp = () => {
           });
         });
 
-        // --- UPDATED LISTENER FOR AUTOMATIC PAUSE ---
         socket.on('jobPaused', (data: { profileName: string, reason: string, jobType?: string }) => {
-            const type = data.jobType || 'ticket'; // Default to ticket if undefined
+            const type = data.jobType || 'ticket'; 
 
             if (type === 'ticket') {
                 setJobs(prevJobs => {
@@ -624,15 +631,12 @@ const MainApp = () => {
                     };
                 });
             }
-            // Can add other else-if blocks here for other job types if auto-pause is implemented for them
-
             toast({ 
                 title: "Job Paused Automatically", 
                 description: data.reason, 
                 variant: "destructive" 
             });
         });
-        // ----------------------------------------
 
         socket.on('invoiceResult', (result: InvoiceResult & { profileName: string }) => {
             setInvoiceJobs(prevJobs => {
@@ -822,7 +826,6 @@ const MainApp = () => {
         };
     }, [toast]);
     
-    // ... (rest of the file remains same)
     const handleOpenAddProfile = () => {
         setEditingProfile(null);
         setIsProfileModalOpen(true);
@@ -890,7 +893,6 @@ const MainApp = () => {
                             />
                         }
                     />
-                    {/* ... other routes ... */}
                     <Route
                         path="/single-ticket"
                         element={
@@ -1087,6 +1089,20 @@ const MainApp = () => {
                             </DashboardLayout>
                         }
                     />
+
+                    {/* --- NEW EXPENSE TEST ROUTE --- */}
+                    <Route
+                        path="/expense-test"
+                        element={
+                            <ExpenseTest 
+                                socket={socketRef.current}
+                                onAddProfile={handleOpenAddProfile}
+                                onEditProfile={handleOpenEditProfile}
+                                onDeleteProfile={handleDeleteProfile}
+                            />
+                        }
+                    />
+                    {/* ----------------------------- */}
 
                     <Route path="*" element={<NotFound />} />
                 </Routes>

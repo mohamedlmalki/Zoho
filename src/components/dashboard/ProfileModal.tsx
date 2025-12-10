@@ -1,4 +1,3 @@
-// --- FILE: src/components/dashboard/ProfileModal.tsx (MODIFIED) ---
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,8 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Profile } from '@/App';
 import { useToast } from '@/hooks/use-toast';
-// --- ADDED 'Video' icon ---
-import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video } from 'lucide-react';
+import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video, Receipt } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { Separator } from '../ui/separator';
 import {
@@ -29,13 +27,11 @@ interface ProfileModalProps {
 
 const SERVER_URL = "http://localhost:3000";
 
-// --- MODIFICATION: Updated interface based on your logs ---
 interface Portal {
   id: string;
   portal_name: string;
-  [key: string]: any; // Other properties
+  [key: string]: any; 
 }
-// --- END MODIFICATION ---
 
 const getInitialFormData = (): Profile => ({
   profileName: '',
@@ -62,18 +58,22 @@ const getInitialFormData = (): Profile => ({
     orgId: '',
   },
   creator: {
-    baseUrl: 'www.zohoapis.com', // Default to .com
+    baseUrl: 'www.zohoapis.com',
     ownerName: '',
     appName: '',
   },
   projects: {
     portalId: '',
   },
-  // --- ADDED ---
   meeting: {
     zsoid: '',
   },
-  // --- END ADDED ---
+  // --- ADDED ---
+  expense: {
+    orgId: '',
+    testModuleName: 'cm_testmodule'
+  },
+  // -------------
 });
 
 
@@ -100,9 +100,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 people: { ...getInitialFormData().people, ...profile.people },
                 creator: { ...getInitialFormData().creator, ...profile.creator },
                 projects: { ...getInitialFormData().projects, ...profile.projects },
-                // --- ADDED ---
                 meeting: { ...getInitialFormData().meeting, ...profile.meeting },
-                // --- END ADDED ---
+                // --- ADDED ---
+                expense: { ...getInitialFormData().expense, ...profile.expense },
+                // -------------
             });
         } else {
             setFormData(getInitialFormData());
@@ -133,9 +134,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
             return;
         }
 
-        // 1. "Smart" Case: Only one portal
         if (portals.length === 1) {
-            // --- MODIFICATION: Use 'id' based on log ---
             const portalId = portals[0].id;
             setFormData(prev => ({ 
                 ...prev, 
@@ -145,7 +144,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
             return;
         }
 
-        // 2. "Manual" Case: Multiple portals
         setPortalList(portals);
         setIsPortalModalOpen(true);
         toast({ title: "Multiple Portals Found", description: "Please select your portal from the list." });
@@ -175,9 +173,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // --- MODIFIED ---
-  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting', e: React.ChangeEvent<HTMLInputElement>) => {
-  // --- END MODIFIED ---
+  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense', e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
         ...prev,
@@ -364,7 +360,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 </div>
               </div>
 
-              {/* --- ZOHO MEETING SETTINGS (ADDED) --- */}
+              {/* --- ZOHO MEETING SETTINGS --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">
                   <Video className="h-4 w-4 mr-2" />
@@ -374,6 +370,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="meeting_zsoid" className="text-right">Org ID (zsoid)</Label>
                     <Input id="meeting_zsoid" name="zsoid" value={formData.meeting?.zsoid || ''} onChange={(e) => handleNestedChange('meeting', e)} className="col-span-3" placeholder="(Optional) e.g., 1000XXXX" />
+                    </div>
+                </div>
+              </div>
+
+              {/* --- ZOHO EXPENSE SETTINGS (ADDED) --- */}
+              <div>
+                <h4 className="text-sm font-semibold mb-4 flex items-center">
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Zoho Expense Settings
+                </h4>
+                <div className="grid gap-4 pl-4 border-l-2 ml-2">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="expense_orgId" className="text-right">Org ID</Label>
+                    <Input id="expense_orgId" name="orgId" value={formData.expense?.orgId || ''} onChange={(e) => handleNestedChange('expense', e)} className="col-span-3" placeholder="e.g., 600012345" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="expense_testModuleName" className="text-right">Test Module</Label>
+                    <Input id="expense_testModuleName" name="testModuleName" value={formData.expense?.testModuleName || ''} onChange={(e) => handleNestedChange('expense', e)} className="col-span-3" placeholder="e.g., cm_testmodule" />
                     </div>
                 </div>
               </div>
@@ -516,7 +530,6 @@ const PortalSelectorModal: React.FC<PortalSelectorModalProps> = ({ isOpen, onClo
                 </DialogHeader>
                 <ScrollArea className="max-h-60">
                     <div className="space-y-2 p-1">
-                        {/* --- MODIFICATION: Use 'id' and 'portal_name' --- */}
                         {portals.map((portal) => (
                             <Button
                                 key={portal.id}
@@ -527,7 +540,6 @@ const PortalSelectorModal: React.FC<PortalSelectorModalProps> = ({ isOpen, onClo
                                 {portal.portal_name}
                             </Button>
                         ))}
-                        {/* --- END MODIFICATION --- */}
                     </div>
                 </ScrollArea>
                 <DialogFooter>

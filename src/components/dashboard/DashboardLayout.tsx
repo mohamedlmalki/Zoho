@@ -1,9 +1,8 @@
-// --- FILE: src/components/dashboard/DashboardLayout.tsx ---
 import React from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'; // Added hooks
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'; 
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video, Activity } from 'lucide-react'; // Added Activity icon
+import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video, Activity, Receipt } from 'lucide-react'; 
 import { cn } from '@/lib/utils';
 import { ProfileSelector } from './ProfileSelector';
 import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs } from '@/App';
@@ -71,7 +70,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const location = useLocation();
   const progressPercent = stats.totalToProcess > 0 ? (stats.totalTickets / stats.totalToProcess) * 100 : 0;
   
-  // Check if we are currently on the stats page to highlight the button
   const isStatsPage = location.pathname === '/live-stats';
 
   return (
@@ -164,6 +162,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   Webinar Registration
                 </SidebarNavLink>
               </div>
+
+              {/* --- ADDED: ZOHO EXPENSE --- */}
+              <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Expense</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    custom module verification
+                </p>
+                <SidebarNavLink to="/expense-test">
+                  <Receipt className="h-4 w-4" />
+                  Test Module
+                </SidebarNavLink>
+              </div>
+              {/* --------------------------- */}
+
               <SidebarDivider />
              
                <div>
@@ -218,7 +231,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30 justify-between">
           <div className="flex-1"></div>
           
-          {/* --- NEW BUTTON IN NAVBAR --- */}
           <Button 
             variant={isStatsPage ? "default" : "outline"} 
             size="sm" 
@@ -228,7 +240,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <Activity className="h-4 w-4" />
             Live Statistics
           </Button>
-          {/* --------------------------- */}
 
           {stats.isProcessing && stats.totalToProcess > 0 && (
             <div className="absolute bottom-0 left-0 w-full">

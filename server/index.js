@@ -1,4 +1,3 @@
-// --- FILE: server/index.js (MODIFIED) ---
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -13,6 +12,7 @@ const peopleHandler = require('./people-handler');
 const creatorHandler = require('./creator-handler');
 const projectsHandler = require('./projects-handler');
 const meetingHandler = require('./meeting-handler');
+const expenseHandler = require('./expense-handler'); // --- IMPORTED ---
 require('dotenv').config();
 
 const app = express();
@@ -32,6 +32,7 @@ peopleHandler.setActiveJobs(activeJobs);
 creatorHandler.setActiveJobs(activeJobs);
 projectsHandler.setActiveJobs(activeJobs);
 meetingHandler.setActiveJobs(activeJobs);
+expenseHandler.setActiveJobs(activeJobs); // --- REGISTERED ---
 
 
 const authStates = {};
@@ -88,6 +89,8 @@ app.post('/api/zoho/auth', (req, res) => {
         'ZohoMeeting.webinar.UPDATE',
         'ZohoMeeting.webinar.CREATE',
         'ZohoMeeting.user.READ',
+        
+        'ZohoExpense.fullaccess.ALL', // --- ADDED SCOPE FOR EXPENSE ---
 		
         'WorkDrive.workspace.ALL',
         'WorkDrive.files.ALL',
@@ -193,18 +196,17 @@ app.post('/api/projects/tasks/single', async (req, res) => {
         const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
 
         const result = await projectsHandler.handleCreateSingleTask({
-            ...formData, // contains projectId, tasklistId, taskNameS (as taskName), taskDescription
-            taskName: formData.taskNames, // handle single name
+            ...formData, 
+            taskName: formData.taskNames, 
             portalId: activeProfile?.projects?.portalId,
             selectedProfileName,
-            bulkDefaultData: formData.bulkDefaultData || {} // <-- Pass dynamic fields
+            bulkDefaultData: formData.bulkDefaultData || {} 
         });
         res.json(result);
     } catch (error) {
         res.status(500).json({ success: false, error: 'An unexpected server error occurred during single task creation.' });
     }
 });
-// --- END NEW REST ENDPOINT ---
 
 // --- PROFILE MANAGEMENT API ---
 app.get('/api/profiles', (req, res) => {
@@ -377,13 +379,10 @@ io.on('connection', (socket) => {
                     portalData: portalResponse.data 
                 };
             }
-            // --- MODIFIED: ZOHO MEETING API STATUS CHECK ---
             else if (service === 'meeting') {
-                // --- FIX: Using the correct endpoint you provided ---
                 const userDetailsResponse = await makeApiCall('get', '/api/v2/user.json', null, activeProfile, 'meeting');
                 
-                // Assuming response structure based on other Zoho APIs and your docs
-                const userData = userDetailsResponse.data; // The root object might be the user
+                const userData = userDetailsResponse.data; 
                 validationData = { 
                     orgName: userData.organization?.org_name || 'Zoho Meeting Org',
                     agentInfo: { 
@@ -393,7 +392,6 @@ io.on('connection', (socket) => {
                     userData: userData
                 };
             }
-            // --- END MODIFIED ---
 
             socket.emit('apiStatusResult', { 
                 success: true, 
@@ -433,7 +431,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // --- ADDED: Utility listener for Profile Modal ---
     socket.on('getProjectsPortals', (data) => {
         projectsHandler.handleGetPortals(socket, data);
     });
@@ -553,17 +550,16 @@ io.on('connection', (socket) => {
         });
     }
 
-    // --- MODIFIED: Zoho Projects Listeners ---
+    // Zoho Projects Listeners
     const projectsListeners = {
         'getProjectsPortals': projectsHandler.handleGetPortals, 
         'getProjectsProjects': projectsHandler.handleGetProjects,
-        'getProjectsTaskLists': projectsHandler.handleGetTaskLists, // Matches your handler
+        'getProjectsTaskLists': projectsHandler.handleGetTaskLists, 
         'getProjectsTasks': projectsHandler.handleGetTasks,
         'startBulkCreateTasks': projectsHandler.handleStartBulkCreateTasks,
         'getProjectsTaskLayout': projectsHandler.handleGetTaskLayout,
 		'updateProjectDetails': projectsHandler.handleUpdateProjectDetails,
     };
-    // --- END MODIFICATION ---
 
     for (const [event, handler] of Object.entries(projectsListeners)) {
         socket.on(event, (data) => {
@@ -571,25 +567,22 @@ io.on('connection', (socket) => {
             const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
             if (activeProfile) {
                 if (typeof handler === 'function') {
-                    // Pass the activeProfile to the handler
                     handler(socket, { ...data, activeProfile });
                 } else {
                     console.error(`[ERROR] Handler for event '${event}' is not a function.`);
                     socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.'` });
                 }
             } else {
-                 // Emit error if profile not found, except for portal fetch which uses temp credentials
                  if(event !== 'getProjectsPortals') {
                     socket.emit('bulkError', { message: 'Active profile not found.' });
                  } else {
-                    // For getProjectsPortals, the handler creates its own temp profile
                     handler(socket, data);
                  }
             }
         });
     }
 
-    // --- ADDED: Zoho Meeting Listeners ---
+    // Zoho Meeting Listeners
     const meetingListeners = {
         'fetchWebinars': meetingHandler.handleGetWebinars,
         'startBulkRegistration': meetingHandler.handleStartBulkRegistration,
@@ -611,7 +604,18 @@ io.on('connection', (socket) => {
             }
         });
     }
-    // --- END ADDED ---
+
+    // --- ADDED: Zoho Expense Listener ---
+    socket.on('testExpenseCustomModule', (data) => {
+         const profiles = readProfiles();
+         const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
+         if (activeProfile) {
+             expenseHandler.handleTestCustomModule(socket, { ...data, activeProfile });
+         } else {
+             socket.emit('expenseTestResult', { success: false, message: 'Profile not found.' });
+         }
+    });
+    // ------------------------------------
 });
 
 

@@ -33,6 +33,10 @@
     },
     "meeting": {
       "zsoid": ""
+    },
+    "expense": {
+      "orgId": "908260928",
+      "testModuleName": "cm_testmodule"
     }
   },
   {
@@ -1689,6 +1693,46 @@
     },
     "meeting": {
       "zsoid": ""
+    }
+  },
+  {
+    "profileName": "expense",
+    "clientId": "1000.4PV7ZBUX9VKWIMPH0PZSI5MT780SFV",
+    "clientSecret": "369c0c06e86b3525f4d55d8fc5db470e813adca18f",
+    "refreshToken": "1000.a4defa415c89cd67c62241b16bf2f652.c05227f4277e8e615747e356a3e460c6",
+    "desk": {
+      "orgId": "",
+      "defaultDepartmentId": "",
+      "fromEmailAddress": "",
+      "mailReplyAddressId": ""
+    },
+    "inventory": {
+      "orgId": ""
+    },
+    "catalyst": {
+      "projectId": "",
+      "fromEmail": ""
+    },
+    "qntrl": {
+      "orgId": ""
+    },
+    "people": {
+      "orgId": ""
+    },
+    "creator": {
+      "baseUrl": "www.zohoapis.com",
+      "ownerName": "",
+      "appName": ""
+    },
+    "projects": {
+      "portalId": ""
+    },
+    "meeting": {
+      "zsoid": ""
+    },
+    "expense": {
+      "orgId": "908260928",
+      "testModuleName": "cm_testmodule"
     }
   }
 ]
