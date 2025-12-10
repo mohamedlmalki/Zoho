@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Socket } from 'socket.io-client';
-import { useLocation } from 'react-router-dom'; // --- ADDED THIS ---
+import { useLocation } from 'react-router-dom'; 
 import { Profile, PeopleJobs, PeopleJobState, PeopleFormData } from '@/App';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
 import { useQuery } from '@tanstack/react-query';
@@ -194,7 +194,7 @@ const DynamicFormField = ({ field, value, onChange, isBulk = false, disabled = f
 
 
 const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
-  const location = useLocation(); // --- ADDED ---
+  const location = useLocation(); 
   const [activeProfileName, setActiveProfileName] = useState<string | null>(null);
   const [apiStatus, setApiStatus] = useState<ApiStatus>({ status: 'loading', message: 'Checking...' });
   const { toast } = useToast(); 
@@ -239,7 +239,8 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     bulkPrimaryField, 
     bulkPrimaryValues, 
     bulkDefaultData, 
-    bulkDelay 
+    bulkDelay,
+    stopAfterFailures 
   } = formData;
 
   const filteredForms = useMemo(() => {
@@ -507,7 +508,8 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
         primaryFieldLabelName: bulkPrimaryField,
         primaryFieldValues: primaryValues,
         defaultData: bulkDefaultData,
-        delay: bulkDelay
+        delay: bulkDelay,
+        stopAfterFailures: stopAfterFailures || 0 // --- Pass this new value
     });
   };
 
@@ -559,7 +561,6 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
     service: 'people' as const, 
   };
   
-  // Calculate remaining
   const remainingCount = activeJob.totalToProcess - activeJob.results.length;
 
   return (
@@ -717,7 +718,7 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
                                             />
                                         </div>
                                         
-                                        {/* --- Delay Input + Side-by-Side Stats --- */}
+                                        {/* --- Delay Input + Auto-Pause + Stats --- */}
                                         <div className="flex flex-wrap items-end gap-6">
                                             <div className="space-y-2">
                                                 <Label htmlFor="delay">Delay (seconds)</Label>
@@ -732,6 +733,27 @@ const PeopleForms: React.FC<PeopleFormsProps> = (props) => {
                                                     disabled={activeJob.isProcessing}
                                                 />
                                             </div>
+
+                                            {/* --- NEW AUTO-PAUSE INPUT --- */}
+                                            <div className="space-y-2">
+                                                <Label htmlFor="stopFailures" className="whitespace-nowrap">
+                                                    Auto-pause after errors
+                                                </Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        id="stopFailures"
+                                                        type="number"
+                                                        min="0"
+                                                        placeholder="0"
+                                                        value={stopAfterFailures || 0}
+                                                        onChange={(e) => handleFormStateChange('stopAfterFailures', parseInt(e.target.value) || 0)}
+                                                        className="w-24"
+                                                        disabled={activeJob.isProcessing}
+                                                    />
+                                                    <span className="text-xs text-muted-foreground">(0 = disabled)</span>
+                                                </div>
+                                            </div>
+                                            {/* --------------------------- */}
 
                                             {activeJob && (activeJob.isProcessing || activeJob.results.length > 0) && (
                                                 <div className="flex items-center gap-3 bg-muted/40 p-2 rounded-md border border-border h-10">

@@ -6,131 +6,233 @@ const setActiveJobs = (jobsObject) => {
   activeJobs = jobsObject;
 };
 
-// Helper for the 10s delay
-const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-const handleGetExpenseFields = async (socket, data) => {
-    try {
-        const { activeProfile, moduleName } = data;
-        
-        if (!activeProfile || !activeProfile.expense?.orgId) {
-            throw new Error('Expense profile or Org ID not configured.');
-        }
-
-        // Corresponds to your server.js: /api/get-fields
-        const url = `/settings/fields?entity=${moduleName}`;
-        const response = await makeApiCall('get', url, null, activeProfile, 'expense');
-        
-        // Zoho Expense usually returns { fields: [...] } or { data: [...] }
-        const fields = response.data.fields || response.data.data || [];
-
-        socket.emit('expenseFieldsResult', { success: true, fields: fields });
-
-    } catch (error) {
-        const { message } = parseError(error);
-        socket.emit('expenseFieldsResult', { success: false, error: message });
-    }
+const interruptibleSleep = (ms, jobId) => {
+    return new Promise(resolve => {
+        if (ms <= 0) return resolve();
+        const interval = 100;
+        let elapsed = 0;
+        const timerId = setInterval(() => {
+            if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') {
+                clearInterval(timerId);
+                return resolve();
+            }
+            elapsed += interval;
+            if (elapsed >= ms) {
+                clearInterval(timerId);
+                resolve();
+            }
+        }, interval);
+    });
 };
 
-const handleCreateExpenseRecord = async (socket, data) => {
-    const { activeProfile, moduleName, formData, waitForLog } = data;
-
+// --- API 1: Get all forms ---
+const handleGetForms = async (socket, data) => {
     try {
-        if (!activeProfile || !activeProfile.expense?.orgId) {
-            throw new Error('Expense profile or Org ID not configured.');
-        }
-
-        // 1. CREATE RECORD
-        const createUrl = `/${moduleName}`;
-        // Zoho Expense expects JSON body directly
-        const createResponse = await makeApiCall('post', createUrl, formData, activeProfile, 'expense');
+        const { activeProfile } = data;
+        const response = await makeApiCall('get', '/people/api/forms', null, activeProfile, 'people');
         
-        const resData = createResponse.data;
-        let recordId = null;
-
-        // Try to find ID in response (logic adapted from your server.js)
-        const keys = Object.keys(resData);
-        keys.forEach(k => {
-            if (resData[k] && resData[k].module_record_id) recordId = resData[k].module_record_id;
-            else if (resData[k] && resData[k].custom_module_id) recordId = resData[k].custom_module_id;
-            else if (resData[k] && resData[k].id) recordId = resData[k].id;
-        });
-
-        // If we don't need to wait, just return success
-        if (!waitForLog) {
-            socket.emit('expenseCreateResult', { 
+        if (response.data?.response?.status === 0) {
+            socket.emit('peopleFormsResult', { 
                 success: true, 
-                recordId: recordId || 'Unknown', 
-                data: resData,
-                logFound: false 
-            });
-            return;
-        }
-
-        if (!recordId) {
-            throw new Error("Record created, but ID could not be parsed from response.");
-        }
-
-        // Notify client that we are waiting
-        socket.emit('expenseLogStatus', { status: 'waiting', message: 'Record created. Waiting 10s to inspect logs...' });
-
-        // 2. WAIT
-        await wait(10000);
-
-        // 3. INSPECT
-        const detailUrl = `/${moduleName}/${recordId}`;
-        const detailRes = await makeApiCall('get', detailUrl, null, activeProfile, 'expense');
-        const body = detailRes.data;
-
-        let recordData = null;
-        // Find the main record object
-        Object.keys(body).forEach(k => {
-            if (typeof body[k] === 'object' && body[k].module_fields) {
-                recordData = body[k];
-            }
-        });
-
-        if (!recordData) {
-             socket.emit('expenseCreateResult', { 
-                success: true, 
-                recordId, 
-                logFound: false, 
-                debugMessage: "Could not find 'module_fields' in GET response." 
-            });
-            return;
-        }
-
-        // Find 'cf_api_log'
-        const fields = recordData.module_fields || [];
-        const logField = fields.find(f => f.api_name === "cf_api_log");
-        const logValue = logField ? logField.value : null;
-
-        if (logValue && logValue.includes("API LOG")) {
-             socket.emit('expenseCreateResult', { 
-                success: true, 
-                recordId, 
-                logFound: true, 
-                logMessage: logValue,
-                fullRecord: recordData
+                forms: response.data.response.result 
             });
         } else {
-             socket.emit('expenseCreateResult', { 
+            const message = response.data?.response?.message || 'Failed to fetch forms.';
+            socket.emit('peopleFormsResult', { success: false, error: message });
+        }
+    } catch (error) {
+        const { message } = parseError(error);
+        socket.emit('peopleFormsResult', { success: false, error: message });
+    }
+};
+
+// --- API 2: Get fields for a specific form ---
+const handleGetFormComponents = async (socket, data) => {
+    try {
+        const { activeProfile, formLinkName } = data;
+        if (!formLinkName) {
+            throw new Error("formLinkName is required.");
+        }
+        
+        const url = `/people/api/forms/${formLinkName}/components`;
+        const response = await makeApiCall('get', url, null, activeProfile, 'people');
+        
+        if (response.data?.response?.status === 0) {
+            socket.emit('peopleFormComponentsResult', { 
                 success: true, 
-                recordId, 
-                logFound: false, 
-                debugMessage: `Field 'cf_api_log' found but empty or missing keyword. Value: '${logValue}'`,
-                fullRecord: recordData
+                components: response.data.response.result 
             });
+        } else {
+            const message = response.data?.response?.message || 'Failed to fetch form components.';
+            socket.emit('peopleFormComponentsResult', { success: false, error: message });
+        }
+    } catch (error) {
+        const { message } = parseError(error);
+        socket.emit('peopleFormComponentsResult', { success: false, error: message });
+    }
+};
+
+// --- API 3: Insert a single record into a form ---
+const handleInsertRecord = async (socket, data) => {
+    try {
+        const { activeProfile, formLinkName, inputData } = data;
+        if (!formLinkName || !inputData) {
+            throw new Error("formLinkName and inputData are required.");
+        }
+        
+        const url = `/api/forms/json/${formLinkName}/insertRecord`;
+        
+        const params = new URLSearchParams();
+        params.append('inputData', JSON.stringify(inputData));
+
+        const response = await makeApiCall('post', url, params, activeProfile, 'people');
+
+        if (response.data?.response?.status === 0) {
+            socket.emit('peopleInsertRecordResult', { 
+                success: true, 
+                result: response.data.response.result 
+            });
+        } else {
+            const message = response.data?.response?.message || 'Failed to insert record.';
+            socket.emit('peopleInsertRecordResult', { success: false, error: message });
+        }
+    } catch (error) {
+        const { message, fullResponse } = parseError(error);
+        const detailedError = fullResponse?.response?.errors?.error?.message || message;
+        socket.emit('peopleInsertRecordResult', { success: false, error: detailedError });
+    }
+};
+
+// --- MODIFICATION: API 4: Start Bulk Insert Records ---
+const handleStartBulkInsertRecords = async (socket, data) => {
+    const { 
+        primaryFieldValues, 
+        defaultData, 
+        delay, 
+        selectedProfileName, 
+        activeProfile,
+        formLinkName,
+        primaryFieldLabelName,
+        stopAfterFailures = 0 // --- 1. Receive failure limit
+    } = data;
+    
+    const jobId = createJobId(socket.id, selectedProfileName, 'people');
+    activeJobs[jobId] = { status: 'running' };
+
+    let consecutiveFailures = 0; // --- 2. Initialize counter
+
+    try {
+        if (!activeProfile || !activeProfile.people) {
+            throw new Error('Zoho People profile configuration is missing.');
+        }
+        if (!formLinkName || !primaryFieldLabelName || !primaryFieldValues) {
+            throw new Error('Missing formLinkName, primaryFieldLabelName, or values list.');
+        }
+
+        const url = `/api/forms/json/${formLinkName}/insertRecord`;
+
+        for (let i = 0; i < primaryFieldValues.length; i++) {
+            if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+
+            // --- 3. Auto-Pause Logic ---
+            if (activeJobs[jobId].status === 'paused') {
+                consecutiveFailures = 0; // Reset counter on resume
+            }
+            while (activeJobs[jobId]?.status === 'paused') {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            // ---------------------------
+
+            if (i > 0 && delay > 0) await interruptibleSleep(delay * 1000, jobId);
+            if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+
+            const primaryValue = primaryFieldValues[i];
+            if (!primaryValue.trim()) continue;
+
+            // Construct the inputData for this specific record
+            const inputData = {
+                ...defaultData,
+                [primaryFieldLabelName]: primaryValue
+            };
+            
+            // Remove any fields with empty string values, as Zoho API might reject them
+            Object.keys(inputData).forEach(key => {
+                if (inputData[key] === null || inputData[key] === '') {
+                    delete inputData[key];
+                }
+            });
+
+            try {
+                const params = new URLSearchParams();
+                params.append('inputData', JSON.stringify(inputData));
+
+                const response = await makeApiCall('post', url, params, activeProfile, 'people');
+
+                if (response.data?.response?.status === 0) {
+                     socket.emit('peopleResult', { 
+                        email: primaryValue, 
+                        success: true,
+                        details: `Record created. ID: ${response.data.response.result.pkId}`,
+                        fullResponse: response.data,
+                        profileName: selectedProfileName
+                    });
+                    
+                    consecutiveFailures = 0; // --- 4. Reset counter on success
+
+                } else {
+                    const message = response.data?.response?.message || 'Failed to insert record.';
+                    throw new Error(message);
+                }
+
+            } catch (error) {
+                // Handle errors for a single record
+                const { message, fullResponse } = parseError(error);
+                const detailedError = fullResponse?.response?.errors?.error?.message || message;
+                
+                consecutiveFailures++; // --- 5. Increment counter on failure
+
+                socket.emit('peopleResult', { 
+                    email: primaryValue, 
+                    success: false, 
+                    error: detailedError, 
+                    fullResponse: fullResponse || error, 
+                    profileName: selectedProfileName 
+                });
+
+                // --- 6. TRIGGER PAUSE if limit reached ---
+                if (stopAfterFailures > 0 && consecutiveFailures >= stopAfterFailures) {
+                    activeJobs[jobId].status = 'paused';
+                    socket.emit('jobPaused', {
+                        profileName: selectedProfileName,
+                        reason: `Auto-paused after ${consecutiveFailures} consecutive failures.`,
+                        jobType: 'people' // Pass jobType so frontend knows which state to update
+                    });
+                }
+                // -----------------------------------------
+            }
         }
 
     } catch (error) {
-        const { message, fullResponse } = parseError(error);
-        socket.emit('expenseCreateResult', { success: false, error: message, fullResponse });
+        // Handle critical job-level errors
+        socket.emit('bulkError', { message: error.message || 'A critical server error occurred.', profileName: selectedProfileName, jobType: 'people' });
+    } finally {
+        if (activeJobs[jobId]) {
+            const finalStatus = activeJobs[jobId].status;
+            if (finalStatus === 'ended') {
+                socket.emit('bulkEnded', { profileName: selectedProfileName, jobType: 'people' });
+            } else {
+                socket.emit('bulkComplete', { profileName: selectedProfileName, jobType: 'people' });
+            }
+            delete activeJobs[jobId];
+        }
     }
 };
+// --- END MODIFICATION ---
 
 module.exports = {
     setActiveJobs,
-    handleGetExpenseFields,
-    handleCreateExpenseRecord
-}
+    handleGetForms,
+    handleGetFormComponents,
+    handleInsertRecord,
+    handleStartBulkInsertRecords, 
+};

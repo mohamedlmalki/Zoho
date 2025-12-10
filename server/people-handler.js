@@ -103,7 +103,7 @@ const handleInsertRecord = async (socket, data) => {
     }
 };
 
-// --- MODIFICATION: API 4: Start Bulk Insert Records ---
+// --- MODIFICATION: API 4: Start Bulk Insert Records (With Auto-Pause) ---
 const handleStartBulkInsertRecords = async (socket, data) => {
     const { 
         primaryFieldValues, 
@@ -112,11 +112,14 @@ const handleStartBulkInsertRecords = async (socket, data) => {
         selectedProfileName, 
         activeProfile,
         formLinkName,
-        primaryFieldLabelName 
+        primaryFieldLabelName,
+        stopAfterFailures = 0 // --- 1. Receive failure limit
     } = data;
     
     const jobId = createJobId(socket.id, selectedProfileName, 'people');
     activeJobs[jobId] = { status: 'running' };
+
+    let consecutiveFailures = 0; // --- 2. Initialize counter
 
     try {
         if (!activeProfile || !activeProfile.people) {
@@ -130,9 +133,16 @@ const handleStartBulkInsertRecords = async (socket, data) => {
 
         for (let i = 0; i < primaryFieldValues.length; i++) {
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
+
+            // --- 3. Auto-Pause Logic ---
+            if (activeJobs[jobId].status === 'paused') {
+                consecutiveFailures = 0; // Reset counter on resume
+            }
             while (activeJobs[jobId]?.status === 'paused') {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
+            // ---------------------------
+
             if (i > 0 && delay > 0) await interruptibleSleep(delay * 1000, jobId);
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
 
@@ -160,12 +170,15 @@ const handleStartBulkInsertRecords = async (socket, data) => {
 
                 if (response.data?.response?.status === 0) {
                      socket.emit('peopleResult', { 
-                        email: primaryValue, // Using 'email' key for consistency
+                        email: primaryValue, 
                         success: true,
                         details: `Record created. ID: ${response.data.response.result.pkId}`,
                         fullResponse: response.data,
                         profileName: selectedProfileName
                     });
+                    
+                    consecutiveFailures = 0; // --- 4. Reset counter on success
+
                 } else {
                     const message = response.data?.response?.message || 'Failed to insert record.';
                     throw new Error(message);
@@ -175,6 +188,9 @@ const handleStartBulkInsertRecords = async (socket, data) => {
                 // Handle errors for a single record
                 const { message, fullResponse } = parseError(error);
                 const detailedError = fullResponse?.response?.errors?.error?.message || message;
+                
+                consecutiveFailures++; // --- 5. Increment counter on failure
+
                 socket.emit('peopleResult', { 
                     email: primaryValue, 
                     success: false, 
@@ -182,6 +198,17 @@ const handleStartBulkInsertRecords = async (socket, data) => {
                     fullResponse: fullResponse || error, 
                     profileName: selectedProfileName 
                 });
+
+                // --- 6. TRIGGER PAUSE if limit reached ---
+                if (stopAfterFailures > 0 && consecutiveFailures >= stopAfterFailures) {
+                    activeJobs[jobId].status = 'paused';
+                    socket.emit('jobPaused', {
+                        profileName: selectedProfileName,
+                        reason: `Auto-paused after ${consecutiveFailures} consecutive failures.`,
+                        jobType: 'people' // Pass jobType so frontend knows which state to update
+                    });
+                }
+                // -----------------------------------------
             }
         }
 
@@ -200,12 +227,11 @@ const handleStartBulkInsertRecords = async (socket, data) => {
         }
     }
 };
-// --- END MODIFICATION ---
 
 module.exports = {
     setActiveJobs,
     handleGetForms,
     handleGetFormComponents,
     handleInsertRecord,
-    handleStartBulkInsertRecords, // --- ADDED ---
+    handleStartBulkInsertRecords, 
 };

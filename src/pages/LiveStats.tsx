@@ -1,12 +1,12 @@
 // --- FILE: src/pages/LiveStats.tsx ---
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { 
     Activity, CheckCircle2, AlertCircle, ExternalLink, 
-    Ticket, Package, Cloud, Mail, Network, FileText, AppWindow, FolderKanban, Video 
+    Ticket, Package, Cloud, Mail, Network, FileText, AppWindow, FolderKanban, Video, Clock 
 } from 'lucide-react';
 import { 
     Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, 
@@ -15,7 +15,7 @@ import {
 import { formatTime } from '@/lib/utils';
 
 interface LiveStatsProps {
-    jobs: Jobs; // Desk
+    jobs: Jobs;
     invoiceJobs: InvoiceJobs;
     catalystJobs: CatalystJobs;
     emailJobs: EmailJobs;
@@ -25,14 +25,6 @@ interface LiveStatsProps {
     projectsJobs: ProjectsJobs;
     webinarJobs: WebinarJobs;
 }
-
-// Helper to determine status color
-const getStatusColor = (isProcessing: boolean, isComplete: boolean, hasErrors: boolean) => {
-    if (isProcessing) return "text-blue-500 animate-pulse";
-    if (isComplete && hasErrors) return "text-orange-500";
-    if (isComplete) return "text-green-500";
-    return "text-muted-foreground";
-};
 
 const ServiceStatCard = ({ 
     title, 
@@ -83,7 +75,6 @@ const ServiceStatCard = ({
                         <div key={profileName} className="space-y-2 border-b last:border-0 pb-3 last:pb-0">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    {/* --- UPDATED: Pass targetProfile in state --- */}
                                     <Badge 
                                         variant="outline" 
                                         className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors flex items-center gap-1 group"
@@ -93,7 +84,6 @@ const ServiceStatCard = ({
                                         {profileName}
                                         <ExternalLink className="h-3 w-3 opacity-50 group-hover:opacity-100" />
                                     </Badge>
-                                    {/* ------------------------------------------- */}
                                     {job.isPaused && <Badge variant="secondary" className="text-xs">Paused</Badge>}
                                 </div>
                                 {job.isProcessing ? (
@@ -140,6 +130,14 @@ const ServiceStatCard = ({
 };
 
 export const LiveStats: React.FC<LiveStatsProps> = (props) => {
+    // Force re-render every second to update "Total Time Elapsed"
+    const [now, setNow] = useState(Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     // Calculate global stats
     const allJobs = [
         props.jobs, props.invoiceJobs, props.catalystJobs, props.emailJobs, 
@@ -149,16 +147,55 @@ export const LiveStats: React.FC<LiveStatsProps> = (props) => {
     let activeJobCount = 0;
     let totalSuccess = 0;
     let totalErrors = 0;
+    
+    let globalStartTime: number | null = null;
+    let globalEndTime: number | null = null;
 
     allJobs.forEach(jobMap => {
         Object.values(jobMap).forEach((job: any) => {
-            if (job.isProcessing) activeJobCount++;
-            if (job.results) {
-                totalSuccess += job.results.filter((r: any) => r.success).length;
-                totalErrors += job.results.filter((r: any) => !r.success).length;
+            const hasActivity = job.results?.length > 0 || job.isProcessing;
+            
+            if (hasActivity) {
+                if (job.isProcessing) activeJobCount++;
+                if (job.results) {
+                    totalSuccess += job.results.filter((r: any) => r.success).length;
+                    totalErrors += job.results.filter((r: any) => !r.success).length;
+                }
+
+                // --- Global Time Logic (Fixed) ---
+                if (job.processingStartTime) {
+                    const start = new Date(job.processingStartTime).getTime();
+                    
+                    // 1. Determine Global Start
+                    if (globalStartTime === null || start < globalStartTime) {
+                        globalStartTime = start;
+                    }
+                    
+                    // 2. Determine End Time for this job
+                    let end = start; 
+                    if (job.isProcessing) {
+                        // If running, it ends "now"
+                        end = now;
+                    } else if (job.processingTime) {
+                        // If stopped, end = start + (processingTime * 1000)
+                        // processingTime is in seconds, so we multiply by 1000 to get ms
+                        end = start + (job.processingTime * 1000); 
+                    }
+
+                    // 3. Determine Global End
+                    if (globalEndTime === null || end > globalEndTime) {
+                        globalEndTime = end;
+                    }
+                }
             }
         });
     });
+
+    // Calculate Total Elapsed Time in SECONDS
+    // (globalEndTime - globalStartTime) gives ms, so we divide by 1000
+    const totalElapsedSeconds = (globalStartTime && globalEndTime) 
+        ? Math.floor(Math.max(0, globalEndTime - globalStartTime) / 1000) 
+        : 0;
 
     return (
         <div className="space-y-6">
@@ -168,7 +205,7 @@ export const LiveStats: React.FC<LiveStatsProps> = (props) => {
             </div>
 
             {/* Overview Cards */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
@@ -197,6 +234,17 @@ export const LiveStats: React.FC<LiveStatsProps> = (props) => {
                     <CardContent>
                         <div className="text-2xl font-bold">{totalErrors}</div>
                         <p className="text-xs text-muted-foreground">Records failed</p>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Time Elapsed</CardTitle>
+                        <Clock className="h-4 w-4 text-purple-500" />
+                    </CardHeader>
+                    <CardContent>
+                        {/* We pass seconds to formatTime */}
+                        <div className="text-2xl font-bold">{formatTime(totalElapsedSeconds)}</div>
+                        <p className="text-xs text-muted-foreground">Global duration</p>
                     </CardContent>
                 </Card>
             </div>

@@ -76,7 +76,7 @@ export interface TicketFormData {
   sendDirectReply: boolean;
   verifyEmail: boolean;
   displayName: string;
-  stopAfterFailures: number; // --- ADDED THIS ---
+  stopAfterFailures: number; 
 }
 export interface InvoiceFormData {
   emails: string;
@@ -185,6 +185,7 @@ export interface PeopleFormData {
   bulkPrimaryValues: string;
   bulkDefaultData: { [key: string]: string };
   bulkDelay: number;
+  stopAfterFailures: number; // --- ADDED THIS ---
 }
 export interface PeopleResult {
   email: string;
@@ -192,6 +193,7 @@ export interface PeopleResult {
   details?: string;
   error?: string;
   fullResponse?: any;
+  timestamp?: Date; // Added for consistency
 }
 export interface PeopleJobState {
     formData: PeopleFormData;
@@ -354,7 +356,7 @@ const createInitialJobState = (): JobState => ({
     sendDirectReply: false,
     verifyEmail: false,
     displayName: '',
-    stopAfterFailures: 0, // --- ADDED THIS DEFAULT ---
+    stopAfterFailures: 0, 
   },
   results: [],
   isProcessing: false,
@@ -451,6 +453,7 @@ const createInitialPeopleJobState = (): PeopleJobState => ({
         bulkPrimaryValues: "",
         bulkDefaultData: {},
         bulkDelay: 1,
+        stopAfterFailures: 0, // --- ADDED THIS ---
     },
     results: [],
     isProcessing: false,
@@ -594,18 +597,35 @@ const MainApp = () => {
           });
         });
 
-        // --- NEW LISTENER FOR AUTOMATIC PAUSE ---
-        socket.on('jobPaused', (data: { profileName: string, reason: string }) => {
-            setJobs(prevJobs => {
-                if (!prevJobs[data.profileName]) return prevJobs;
-                return {
-                    ...prevJobs,
-                    [data.profileName]: {
-                        ...prevJobs[data.profileName],
-                        isPaused: true
-                    }
-                };
-            });
+        // --- UPDATED LISTENER FOR AUTOMATIC PAUSE ---
+        socket.on('jobPaused', (data: { profileName: string, reason: string, jobType?: string }) => {
+            const type = data.jobType || 'ticket'; // Default to ticket if undefined
+
+            if (type === 'ticket') {
+                setJobs(prevJobs => {
+                    if (!prevJobs[data.profileName]) return prevJobs;
+                    return {
+                        ...prevJobs,
+                        [data.profileName]: {
+                            ...prevJobs[data.profileName],
+                            isPaused: true
+                        }
+                    };
+                });
+            } else if (type === 'people') {
+                setPeopleJobs(prevJobs => {
+                    if (!prevJobs[data.profileName]) return prevJobs;
+                    return {
+                        ...prevJobs,
+                        [data.profileName]: {
+                            ...prevJobs[data.profileName],
+                            isPaused: true
+                        }
+                    };
+                });
+            }
+            // Can add other else-if blocks here for other job types if auto-pause is implemented for them
+
             toast({ 
                 title: "Job Paused Automatically", 
                 description: data.reason, 
