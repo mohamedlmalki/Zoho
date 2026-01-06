@@ -1670,9 +1670,9 @@
   },
   {
     "profileName": "24",
-    "clientId": "1000.8GEZJT921QNO6AAKIFFZ9G4ANXRQMZ",
-    "clientSecret": "bb950838b24838fe91c4390e093b450f84bf9ec6a0",
-    "refreshToken": "1000.4990212caa927f46db29d22a815c2f8c.d8f5eb6834f0803bc7f3c4f6f37a3eaf",
+    "clientId": "1000.9IDJ7Q8IO08RPIDQKTX2PCCROHQFVV",
+    "clientSecret": "af8e45be239de131816642dff1dce8669098f961b8",
+    "refreshToken": "1000.2a6a7f909f05401f6d4987182887ff63.612ea22167a05d07a83a19befae6c157",
     "desk": {
       "orgId": "907841057",
       "defaultDepartmentId": "1224282000000006907",
@@ -1702,6 +1702,16 @@
     },
     "meeting": {
       "zsoid": ""
+    },
+    "expense": {
+      "orgId": "",
+      "testModuleName": "cm_testmodule"
+    },
+    "fsm": {
+      "orgId": ""
+    },
+    "bookings": {
+      "workspaceId": ""
     }
   },
   {

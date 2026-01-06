@@ -131,6 +131,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </SidebarNavLink>
               </div>
               
+			  <div>
+                <SidebarDivider />
+                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho People</h3>
+                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
+                    no from name - subject only - fast
+                </p>
+                <SidebarNavLink to="/people-forms">
+                  <FileText className="h-4 w-4" />
+                  Forms
+                </SidebarNavLink>
+              </div>
+			  
               <div>
                 <SidebarDivider />
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Qntrl</h3>
@@ -142,17 +154,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   Forms
                 </SidebarNavLink>
               </div>
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho People</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    no from name - subject only - fast
-                </p>
-                <SidebarNavLink to="/people-forms">
-                  <FileText className="h-4 w-4" />
-                  Forms
-                </SidebarNavLink>
-              </div>
+              
 
               <div>
                 <SidebarDivider />
