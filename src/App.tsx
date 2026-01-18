@@ -15,7 +15,6 @@ import { ProfileModal } from '@/components/dashboard/ProfileModal';
 import EmailStatics from "@/pages/EmailStatics";
 import { useJobTimer } from '@/hooks/useJobTimer';
 import BulkSignup from './pages/BulkSignup';
-import SingleSignup from './pages/SingleSignup';
 import CatalystUsers from './pages/CatalystUsers';
 import BulkEmail from './pages/BulkEmail'; 
 import { EmailResult } from './components/dashboard/catalyst/EmailResultsDisplay'; 
@@ -26,8 +25,6 @@ import ProjectsTasksPage from './pages/ProjectsTasksPage';
 import BulkWebinarRegistration from './pages/BulkWebinarRegistration';
 import LiveStats from '@/pages/LiveStats';
 import { DashboardLayout } from '@/components/dashboard/DashboardLayout';
-import ExpenseCustomModule from './pages/ExpenseCustomModule';
-import BulkInvoicesFsm from './pages/BulkInvoicesFsm';
 import BulkContactsFsm from './pages/BulkContactsFsm';
 // --- NEW BOOKINGS IMPORT ---
 import BulkBookings from './pages/BulkBookings';
@@ -68,13 +65,6 @@ export interface Profile {
   };
   meeting?: {
     zsoid?: string;
-  };
-  expense?: {
-    orgId: string;
-    testModuleName?: string;
-  };
-  fsm?: {
-    orgId: string;
   };
   // --- ADDED BOOKINGS ---
   bookings?: {
@@ -362,37 +352,6 @@ export interface WebinarJobs {
     [profileName: string]: WebinarJobState;
 }
 
-export interface ExpenseField {
-    label: string;
-    api_name: string;
-    data_type: string;
-    is_mandatory: boolean;
-    is_system: boolean;
-    is_read_only: boolean;
-}
-
-export interface ExpenseJobState {
-    isProcessing: boolean;
-    isPaused: boolean;
-    isComplete: boolean;
-    totalToProcess: number;
-    countdown: number;
-    results: any[];
-    processingStartTime?: Date | null;
-    processingTime?: number;
-    formData: {
-        moduleName: string;
-        bulkPrimaryField: string;
-        bulkValues: string;
-        defaultData: Record<string, any>;
-        bulkDelay: number;
-        verifyLog: boolean;
-        stopAfterFailures: number;
-        fields: ExpenseField[];
-    };
-}
-export interface ExpenseJobs { [profileName: string]: ExpenseJobState; }
-
 export interface FsmContactFormData {
     emails: string;
     lastName: string;
@@ -421,35 +380,6 @@ export interface FsmContactJobState {
     filterText: string;
 }
 export interface FsmContactJobs { [profileName: string]: FsmContactJobState; }
-
-export interface FsmInvoiceFormData {
-    invoiceData: string;
-    delay: number;
-}
-export interface FsmInvoiceResult {
-    workOrderId: string;
-    email: string;
-    success: boolean;
-    step: string;
-    details?: string;
-    error?: string;
-    fullResponse?: any;
-    timestamp?: Date;
-}
-export interface FsmInvoiceJobState {
-    formData: FsmInvoiceFormData;
-    results: FsmInvoiceResult[];
-    isProcessing: boolean;
-    isPaused: boolean;
-    isComplete: boolean;
-    processingStartTime: Date | null;
-    processingTime: number;
-    totalToProcess: number;
-    countdown: number;
-    currentDelay: number;
-    filterText: string;
-}
-export interface FsmInvoiceJobs { [profileName: string]: FsmInvoiceJobState; }
 
 // --- NEW BOOKINGS INTERFACES ---
 export interface BookingFormData {
@@ -675,50 +605,12 @@ const createInitialWebinarJobState = (): WebinarJobState => ({
     filterText: '',
 });
 
-const createInitialExpenseJobState = (): ExpenseJobState => ({ 
-    isProcessing: false, 
-    isPaused: false,
-    isComplete: false, 
-    totalToProcess: 0,
-    countdown: 0, 
-    results: [], 
-    processingStartTime: null,
-    processingTime: 0,
-    formData: {
-        moduleName: 'cm_testmodule',
-        bulkPrimaryField: '',
-        bulkValues: '',
-        defaultData: {},
-        bulkDelay: 1,
-        verifyLog: false,
-        stopAfterFailures: 0,
-        fields: []
-    }
-});
-
 const createInitialFsmContactJobState = (): FsmContactJobState => ({
     formData: {
         emails: '',
         lastName: '',
         delay: 1,
         stopAfterFailures: 0
-    },
-    results: [],
-    isProcessing: false,
-    isPaused: false,
-    isComplete: false,
-    processingStartTime: null,
-    processingTime: 0,
-    totalToProcess: 0,
-    countdown: 0,
-    currentDelay: 1,
-    filterText: '',
-});
-
-const createInitialFsmInvoiceJobState = (): FsmInvoiceJobState => ({
-    formData: {
-        invoiceData: '',
-        delay: 1,
     },
     results: [],
     isProcessing: false,
@@ -771,9 +663,7 @@ const MainApp = () => {
     const [creatorJobs, setCreatorJobs] = useState<CreatorJobs>({});
     const [projectsJobs, setProjectsJobs] = useState<ProjectsJobs>({});
     const [webinarJobs, setWebinarJobs] = useState<WebinarJobs>({});
-    const [expenseJobs, setExpenseJobs] = useState<ExpenseJobs>({});
     const [fsmContactJobs, setFsmContactJobs] = useState<FsmContactJobs>({});
-    const [fsmInvoiceJobs, setFsmInvoiceJobs] = useState<FsmInvoiceJobs>({});
     // --- NEW BOOKINGS STATE ---
     const [bookingJobs, setBookingJobs] = useState<BookingJobs>({});
 
@@ -792,9 +682,7 @@ const MainApp = () => {
     useJobTimer(creatorJobs, setCreatorJobs, 'creator');
     useJobTimer(projectsJobs, setProjectsJobs, 'projects');
     useJobTimer(webinarJobs, setWebinarJobs, 'webinar');
-    useJobTimer(expenseJobs, setExpenseJobs, 'expense');
     useJobTimer(fsmContactJobs, setFsmContactJobs, 'fsm-contact');
-    useJobTimer(fsmInvoiceJobs, setFsmInvoiceJobs, 'fsm-invoice');
     // --- NEW BOOKINGS TIMER ---
     useJobTimer(bookingJobs, setBookingJobs, 'bookings');
 
@@ -847,11 +735,6 @@ const MainApp = () => {
                 });
             } else if (type === 'people') {
                 setPeopleJobs(prevJobs => {
-                    if (!prevJobs[data.profileName]) return prevJobs;
-                    return { ...prevJobs, [data.profileName]: { ...prevJobs[data.profileName], isPaused: true } };
-                });
-            } else if (type === 'expense') {
-                setExpenseJobs(prevJobs => {
                     if (!prevJobs[data.profileName]) return prevJobs;
                     return { ...prevJobs, [data.profileName]: { ...prevJobs[data.profileName], isPaused: true } };
                 });
@@ -982,59 +865,9 @@ const MainApp = () => {
             };
           });
         });
-
-        socket.on('expenseBulkResult', (res: any) => {
-            setExpenseJobs((prev) => {
-                const job = prev[res.profileName] || createInitialExpenseJobState();
-                return {
-                    ...prev,
-                    [res.profileName]: {
-                        ...job,
-                        results: [...job.results, { ...res, primaryValue: res.value, timestamp: new Date() }]
-                    }
-                };
-            });
-        });
-        socket.on('expenseUpdate', (data: any) => {
-            setExpenseJobs((prev) => {
-                const job = prev[data.profileName];
-                if (!job) return prev;
-                const newResults = job.results.map((r: any) => {
-                    const idMatch = data.recordId && r.recordId && String(r.recordId) === String(data.recordId);
-                    const valMatch = data.primaryValue && r.primaryValue && r.primaryValue === data.primaryValue;
-                    if (idMatch || valMatch) {
-                        return { 
-                            ...r, 
-                            success: data.success, 
-                            details: data.details || data.error,
-                            error: data.error,
-                            verificationResponse: data.verificationResponse 
-                        };
-                    }
-                    return r;
-                });
-                return { ...prev, [data.profileName]: { ...job, results: newResults } };
-            });
-        });
-
         socket.on('fsmContactResult', (result: FsmContactResult & { profileName: string }) => {
             setFsmContactJobs(prevJobs => {
                 const profileJob = prevJobs[result.profileName] || createInitialFsmContactJobState();
-                const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
-                return {
-                    ...prevJobs,
-                    [result.profileName]: {
-                        ...profileJob,
-                        results: [...profileJob.results, { ...result, timestamp: new Date() }],
-                        countdown: isLast ? 0 : profileJob.currentDelay,
-                    }
-                };
-            });
-        });
-
-        socket.on('fsmInvoiceResult', (result: FsmInvoiceResult & { profileName: string }) => {
-            setFsmInvoiceJobs(prevJobs => {
-                const profileJob = prevJobs[result.profileName] || createInitialFsmInvoiceJobState();
                 const isLast = profileJob.results.length + 1 >= profileJob.totalToProcess;
                 return {
                     ...prevJobs,
@@ -1064,7 +897,7 @@ const MainApp = () => {
         });
 
 
-        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar' | 'expense' | 'fsm-contact' | 'fsm-invoice' | 'bookings'}, title: string, description: string, variant?: "destructive") => {
+        const handleJobCompletion = (data: {profileName: string, jobType: 'ticket' | 'invoice' | 'catalyst' | 'email' | 'qntrl' | 'people' | 'creator' | 'projects' | 'webinar' | 'fsm-contact' | 'fsm-invoice' | 'bookings'}, title: string, description: string, variant?: "destructive") => {
             const { profileName, jobType } = data;
             
             const getInitialState = (type: string) => {
@@ -1078,9 +911,7 @@ const MainApp = () => {
                     case 'creator': return createInitialCreatorJobState();
                     case 'projects': return createInitialProjectsJobState();
                     case 'webinar': return createInitialWebinarJobState();
-                    case 'expense': return createInitialExpenseJobState();
                     case 'fsm-contact': return createInitialFsmContactJobState();
-                    case 'fsm-invoice': return createInitialFsmInvoiceJobState();
                     // --- BOOKINGS ---
                     case 'bookings': return createInitialBookingJobState();
                     default: return {} as any;
@@ -1110,9 +941,7 @@ const MainApp = () => {
             else if (jobType === 'creator') setCreatorJobs(updater);
             else if (jobType === 'projects') setProjectsJobs(updater);
             else if (jobType === 'webinar') setWebinarJobs(updater);
-            else if (jobType === 'expense') setExpenseJobs(updater);
             else if (jobType === 'fsm-contact') setFsmContactJobs(updater);
-            else if (jobType === 'fsm-invoice') setFsmInvoiceJobs(updater);
             // --- BOOKINGS ---
             else if (jobType === 'bookings') setBookingJobs(updater);
             
@@ -1231,16 +1060,6 @@ const MainApp = () => {
                         }
                     />
                     <Route
-                        path="/single-signup"
-                        element={
-                            <SingleSignup
-                                onAddProfile={handleOpenAddProfile}
-                                onEditProfile={handleOpenEditProfile}
-                                onDeleteProfile={handleDeleteProfile}
-                            />
-                        }
-                    />
-                    <Route
                         path="/catalyst-users"
                         element={
                             <CatalystUsers
@@ -1337,37 +1156,6 @@ const MainApp = () => {
                             />
                         }
                     />
-
-                    <Route
-                        path="/expense-test" 
-                        element={
-                            <ExpenseCustomModule 
-                                jobs={expenseJobs} 
-                                setJobs={setExpenseJobs} 
-                                createInitialJobState={createInitialExpenseJobState}
-                                socket={socketRef.current} 
-                                onAddProfile={handleOpenAddProfile} 
-                                onEditProfile={handleOpenEditProfile} 
-                                onDeleteProfile={handleDeleteProfile} 
-                            />
-                        }
-                    />
-
-                    {/* --- FSM ROUTES --- */}
-                    <Route
-                        path="/bulk-fsm-invoices" 
-                        element={
-                            <BulkInvoicesFsm 
-                                jobs={fsmInvoiceJobs} 
-                                setJobs={setFsmInvoiceJobs} 
-                                createInitialJobState={createInitialFsmInvoiceJobState}
-                                socket={socketRef.current} 
-                                onAddProfile={handleOpenAddProfile} 
-                                onEditProfile={handleOpenEditProfile} 
-                                onDeleteProfile={handleDeleteProfile} 
-                            />
-                        }
-                    />
                     <Route
                         path="/bulk-fsm-contacts"
                         element={
@@ -1439,7 +1227,6 @@ const MainApp = () => {
                                     creatorJobs={creatorJobs}
                                     projectsJobs={projectsJobs}
                                     webinarJobs={webinarJobs}
-                                    expenseJobs={expenseJobs}
                                     // --- ADDED BOOKINGS ---
                                     bookingJobs={bookingJobs}
                                 />

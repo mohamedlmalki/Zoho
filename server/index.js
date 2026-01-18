@@ -13,7 +13,6 @@ const peopleHandler = require('./people-handler');
 const creatorHandler = require('./creator-handler');
 const projectsHandler = require('./projects-handler');
 const meetingHandler = require('./meeting-handler');
-const expenseHandler = require('./expense-handler'); 
 const fsmHandler = require('./fsm-handler'); 
 const bookingsHandler = require('./bookings-handler'); // --- ADDED BOOKINGS HANDLER
 require('dotenv').config();
@@ -34,7 +33,6 @@ peopleHandler.setActiveJobs(activeJobs);
 creatorHandler.setActiveJobs(activeJobs);
 projectsHandler.setActiveJobs(activeJobs);
 meetingHandler.setActiveJobs(activeJobs);
-expenseHandler.setActiveJobs(activeJobs);
 fsmHandler.setActiveJobs(activeJobs); 
 bookingsHandler.setActiveJobs(activeJobs); // --- ADDED BOOKINGS JOBS
 
@@ -90,7 +88,6 @@ app.post('/api/zoho/auth', (req, res) => {
         'ZohoMeeting.webinar.UPDATE',
         'ZohoMeeting.webinar.CREATE',
         'ZohoMeeting.user.READ',
-        'ZohoExpense.fullaccess.ALL', 
         'WorkDrive.workspace.ALL',
         'WorkDrive.files.ALL',
         'ZohoPC.files.ALL',
@@ -170,15 +167,6 @@ app.post('/api/tickets/single', async (req, res) => {
 app.post('/api/tickets/verify', async (req, res) => {
     try {
         const result = await deskHandler.handleVerifyTicketEmail(req.body);
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'An unexpected server error occurred.' });
-    }
-});
-
-app.post('/api/catalyst/single', async (req, res) => {
-    try {
-        const result = await catalystHandler.handleSingleSignup(req.body);
         res.json(result);
     } catch (error) {
         res.status(500).json({ success: false, error: 'An unexpected server error occurred.' });
@@ -376,23 +364,6 @@ io.on('connection', (socket) => {
                     userData: userData
                 };
             }
-            else if (service === 'expense') {
-                 if (!activeProfile.expense || !activeProfile.expense.orgId) {
-                    throw new Error('Expense Organization ID is not configured for this profile.');
-                }
-                const orgResponse = await makeApiCall('get', '/organizations', null, activeProfile, 'expense');
-                const currentOrg = orgResponse.data.organizations 
-                    ? orgResponse.data.organizations.find(o => o.organization_id === activeProfile.expense.orgId)
-                    : null;
-                validationData = { 
-                    orgName: currentOrg ? currentOrg.name : `Org ID: ${activeProfile.expense.orgId}`,
-                    agentInfo: { 
-                        firstName: currentOrg ? currentOrg.contact_name : 'Expense User', 
-                        lastName: '' 
-                    },
-                    fullOrgData: orgResponse.data
-                };
-            }
             else if (service === 'fsm') {
                 validationData = { 
                     orgName: 'FSM Service',
@@ -489,32 +460,9 @@ io.on('connection', (socket) => {
     const meetingListeners = { 'fetchWebinars': meetingHandler.handleGetWebinars, 'startBulkRegistration': meetingHandler.handleStartBulkRegistration };
     for (const [event, handler] of Object.entries(meetingListeners)) { socket.on(event, (data) => { const profiles = readProfiles(); const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null; if (activeProfile) { if (typeof handler === 'function') { handler(socket, { ...data, activeProfile }); } else { console.error(`[ERROR] Handler for event '${event}' is not a function.`); socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` }); } } else { socket.emit('bulkError', { message: 'Active profile not found.' }); } }); }
 
-    socket.on('getExpenseFields', (data) => {
-         expenseHandler.handleGetExpenseFields(socket, data);
-    });
-
-    socket.on('createExpenseRecord', (data) => {
-         expenseHandler.handleCreateExpenseRecord(socket, data);
-    });
-
-    socket.on('startBulkExpenseCreation', (data) => {
-         expenseHandler.handleStartBulkExpenseCreation(socket, data);
-    });
-
-    socket.on('testExpenseCustomModule', (data) => {
-         const profiles = readProfiles();
-         const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-         if (activeProfile) {
-             expenseHandler.handleTestCustomModule(socket, { ...data, activeProfile });
-         } else {
-             socket.emit('expenseTestResult', { success: false, message: 'Profile not found.' });
-         }
-    });
-
     // --- FSM LISTENERS ---
     const fsmListeners = { 
         'startBulkFsmContact': fsmHandler.handleStartBulkCreateContact,
-        'startBulkFsmInvoice': fsmHandler.handleCreateAndSendFsmInvoice 
     };
     for (const [event, handler] of Object.entries(fsmListeners)) { 
         socket.on(event, (data) => { 

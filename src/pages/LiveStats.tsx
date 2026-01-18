@@ -10,15 +10,14 @@ import {
     Calendar // --- Added Calendar Icon
 } from 'lucide-react';
 import { 
-    Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, 
-    PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs, ExpenseJobs,
+    Jobs, CatalystJobs, EmailJobs, QntrlJobs, 
+    PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs,
     BookingJobs // --- Added Type
 } from '@/App';
 import { formatTime } from '@/lib/utils';
 
 interface LiveStatsProps {
     jobs: Jobs;
-    invoiceJobs: InvoiceJobs;
     catalystJobs: CatalystJobs;
     emailJobs: EmailJobs;
     qntrlJobs: QntrlJobs;
@@ -26,7 +25,6 @@ interface LiveStatsProps {
     creatorJobs: CreatorJobs;
     projectsJobs: ProjectsJobs;
     webinarJobs: WebinarJobs;
-    expenseJobs: ExpenseJobs;
     bookingJobs: BookingJobs; // --- Added Prop
 }
 
@@ -145,9 +143,8 @@ export const LiveStats: React.FC<LiveStatsProps> = (props) => {
 
     // Calculate global stats
     const allJobs = [
-        props.jobs, props.invoiceJobs, props.catalystJobs, props.emailJobs, 
+        props.jobs, props.catalystJobs, props.emailJobs, 
         props.qntrlJobs, props.peopleJobs, props.creatorJobs, props.projectsJobs, 
-        props.webinarJobs, props.expenseJobs, 
         props.bookingJobs // --- Added Bookings
     ];
     
@@ -274,16 +271,13 @@ export const LiveStats: React.FC<LiveStatsProps> = (props) => {
             {/* Service Grids with Routes */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <ServiceStatCard title="Zoho Desk" icon={Ticket} jobMap={props.jobs} route="/" />
-                <ServiceStatCard title="Zoho Inventory" icon={Package} jobMap={props.invoiceJobs} route="/bulk-invoices" />
                 <ServiceStatCard title="Catalyst Signup" icon={Cloud} jobMap={props.catalystJobs} route="/bulk-signup" />
                 <ServiceStatCard title="Catalyst Email" icon={Mail} jobMap={props.emailJobs} route="/bulk-email" />
                 <ServiceStatCard title="Zoho Qntrl" icon={Network} jobMap={props.qntrlJobs} route="/qntrl-forms" />
                 <ServiceStatCard title="Zoho People" icon={FileText} jobMap={props.peopleJobs} route="/people-forms" />
                 <ServiceStatCard title="Zoho Creator" icon={AppWindow} jobMap={props.creatorJobs} route="/creator-forms" />
                 <ServiceStatCard title="Zoho Projects" icon={FolderKanban} jobMap={props.projectsJobs} route="/projects-tasks" />
-                <ServiceStatCard title="Zoho Meeting" icon={Video} jobMap={props.webinarJobs} route="/bulk-webinar-registration" />
-                <ServiceStatCard title="Zoho Expense" icon={CreditCard} jobMap={props.expenseJobs} route="/expense-test" />
-                
+                <ServiceStatCard title="Zoho Meeting" icon={Video} jobMap={props.webinarJobs} route="/bulk-webinar-registration" />                
                 {/* --- ADDED BOOKINGS CARD --- */}
                 <ServiceStatCard title="Zoho Bookings" icon={Calendar} jobMap={props.bookingJobs} route="/bulk-bookings" />
             </div>

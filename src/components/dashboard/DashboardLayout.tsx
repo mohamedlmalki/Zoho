@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Ticket, UserPlus, Package, BarChart3, Cloud, Users, Mail, Network, UserSquare, FileText, AppWindow, FolderKanban, Video, Activity, Receipt, Wrench, Calendar } from 'lucide-react'; 
 import { cn } from '@/lib/utils';
 import { ProfileSelector } from './ProfileSelector';
-import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs, FsmContactJobs, FsmInvoiceJobs } from '@/App';
+import { Profile, Jobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs, FsmContactJobs } from '@/App';
 import { Socket } from 'socket.io-client';
 
 type ApiStatus = {
@@ -18,9 +18,9 @@ type ApiStatus = {
 };
 
 // Added FsmContactJobs, FsmInvoiceJobs
-type AllJobs = Jobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs | FsmContactJobs | FsmInvoiceJobs;
+type AllJobs = Jobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs | FsmContactJobs;
 // --- 2. UPDATE SERVICE TYPE ---
-type ServiceType = 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense' | 'fsm' | 'bookings';
+type ServiceType = 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'fsm' | 'bookings';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -185,37 +185,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     Manage Appointments
   </SidebarNavLink>
               </div>
-              {/* -------------------------------- */}
-
-              <div>
-                <SidebarDivider />
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho Expense</h3>
-                <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
-                    custom module verification
-                </p>
-                <SidebarNavLink to="/expense-test">
-                  <Receipt className="h-4 w-4" />
-                  Custom Module
-                </SidebarNavLink>
-              </div>
-
+			  
               <div>
                 <SidebarDivider />
                 <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Zoho FSM</h3>
                 <p className="px-3 text-[11px] font-normal text-muted-foreground/90 italic mb-2">
                     field service management
                 </p>
-                <SidebarNavLink to="/bulk-fsm-invoices">
-                  <Wrench className="h-4 w-4" />
-                  Bulk FSM Invoices
-                </SidebarNavLink>
                 <SidebarNavLink to="/bulk-fsm-contacts">
                   <UserPlus className="h-4 w-4" />
                   Bulk FSM Contacts
                 </SidebarNavLink>
               </div>
 
-              <SidebarDivider />
              
              <div>
                 <SidebarDivider />
@@ -227,10 +209,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <SidebarNavLink to="/bulk-email">
                   <Mail className="h-4 w-4" />
                   Bulk Email
-                </SidebarNavLink>
-                <SidebarNavLink to="/single-signup">
-                  <Cloud className="h-4 w-4" />
-                  Single Signup
                 </SidebarNavLink>
                 <SidebarNavLink to="/catalyst-users">
                   <Users className="h-4 w-4" />

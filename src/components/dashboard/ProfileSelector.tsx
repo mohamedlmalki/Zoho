@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { User, Building, AlertCircle, CheckCircle, Loader, RefreshCw, Activity, Edit, Trash2, PauseCircle, CheckCircle2, StopCircle, XCircle } from 'lucide-react';
 import { Socket } from 'socket.io-client';
-import { Profile, Jobs as TicketJobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs, FsmContactJobs, FsmInvoiceJobs, BookingJobs } from '@/App'; 
+import { Profile, Jobs as TicketJobs, InvoiceJobs, CatalystJobs, EmailJobs, QntrlJobs, PeopleJobs, CreatorJobs, ProjectsJobs, WebinarJobs, FsmContactJobs, BookingJobs } from '@/App'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,8 +25,9 @@ type ApiStatus = {
     fullResponse?: any;
 };
 
-type AllJobs = TicketJobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs | FsmContactJobs | FsmInvoiceJobs | BookingJobs | any;
+type AllJobs = TicketJobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs | FsmContactJobs | BookingJobs | any;
 
+// REMOVED 'expense' from here
 type ServiceType = 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'fsm' | 'bookings';
 
 interface ProfileSelectorProps {

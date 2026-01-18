@@ -93,7 +93,6 @@ const getValidAccessToken = async (profile, service) => {
             'ZohoProjects.tasks.ALL',
         ].join(','),
         meeting: 'ZohoMeeting.manageOrg.READ,ZohoMeeting.webinar.READ,ZohoMeeting.webinar.DELETE,ZohoMeeting.webinar.UPDATE,ZohoMeeting.webinar.CREATE,ZohoMeeting.user.READ',
-        expense: 'ZohoExpense.fullaccess.ALL',
         fsm: 'ZohoFSM.modules.Contacts.UPDATE,ZohoFSM.modules.Contacts.CREATE,ZohoFSM.modules.Contacts.READ,ZohoFSM.modules.custom.READ,ZohoFSM.modules.custom.ALL,ZohoFSM.modules.custom.CREATE',
         // --- ADDED BOOKINGS SCOPE ---
         bookings: 'zohobookings.data.CREATE'
@@ -142,7 +141,7 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     }
 
     const serviceConfig = profile[service];
-    if (!serviceConfig && service !== 'qntrl' && service !== 'people' && service !== 'meeting' && service !== 'expense' && service !== 'fsm' && service !== 'bookings') {
+    if (!serviceConfig && service !== 'qntrl' && service !== 'people' && service !== 'meeting' && service !== 'fsm' && service !== 'bookings') {
          throw new Error(`Configuration for service "${service}" is missing in profile "${profile.profileName}".`);
     }
 
@@ -162,7 +161,6 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
             people: 'https://people.zoho.com',
             projects: 'https://projectsapi.zoho.com/api/v3',
             meeting: 'https://meeting.zoho.com',
-            expense: 'https://www.zohoapis.com/expense/v1',
             fsm: 'https://fsm.zoho.com/fsm/v1',
             // --- ADDED BOOKINGS URL ---
             bookings: 'https://www.zohoapis.com/bookings/v1/json'
@@ -184,18 +182,13 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     }
     
     const params = { ...queryParams }; 
-    
-    if (service === 'expense' && profile.expense?.orgId) {
-        params.organization_id = profile.expense.orgId;
-        headers['X-com-zoho-expense-organizationid'] = profile.expense.orgId;
-    }
 
     if (service === 'fsm' && profile.fsm?.orgId) {
         headers['X-FSM-ORG-ID'] = profile.fsm.orgId; 
     }
     
     let requestData = data;
-    if ( (service === 'creator' || service === 'meeting' || service === 'expense' || service === 'fsm') && (method.toLowerCase() === 'post' || method.toLowerCase() === 'patch' || method.toLowerCase() === 'put')) {
+    if ( (service === 'creator' || service === 'meeting' || service === 'fsm') && (method.toLowerCase() === 'post' || method.toLowerCase() === 'patch' || method.toLowerCase() === 'put')) {
         headers['Content-Type'] = 'application/json';
         requestData = data; 
     }

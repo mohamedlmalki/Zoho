@@ -168,42 +168,6 @@ const handleStartBulkSignup = async (socket, data) => {
     }
 };
 
-const handleSingleSignup = async (data) => {
-    const { email, firstName, lastName, selectedProfileName } = data;
-    if (!email || !firstName || !lastName || !selectedProfileName) {
-        return { success: false, error: 'Missing required fields.' };
-    }
-    
-    const profiles = require('./utils').readProfiles();
-    const activeProfile = profiles.find(p => p.profileName === selectedProfileName);
-
-    if (!activeProfile || !activeProfile.catalyst || !activeProfile.catalyst.projectId) {
-        return { success: false, error: 'Catalyst profile or Project ID not configured.' };
-    }
-
-    const signupData = {
-        platform_type: 'web',
-        user_details: {
-            first_name: firstName,
-            last_name: lastName,
-            email_id: email,
-        }
-    };
-
-    try {
-        const projectId = activeProfile.catalyst.projectId;
-        const response = await makeApiCall('post', `/baas/v1/project/${projectId}/project-user/signup`, signupData, activeProfile, 'catalyst');
-        return { 
-            success: true, 
-            message: `User created successfully.`,
-            fullResponse: response.data
-        };
-    } catch (error) {
-        const { message, fullResponse } = parseError(error);
-        return { success: false, error: message, fullResponse };
-    }
-};
-
 const handleGetUsers = async (socket, data) => {
     console.log('[CATALYST_HANDLER] Received getUsers request with data:', data);
     try {
@@ -288,7 +252,6 @@ const handleDeleteUsers = async (socket, data) => {
 module.exports = {
     setActiveJobs,
     handleStartBulkSignup,
-    handleSingleSignup,
     handleGetUsers,
     handleDeleteUser,
     handleDeleteUsers,

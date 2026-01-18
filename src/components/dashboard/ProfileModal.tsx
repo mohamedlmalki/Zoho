@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Profile } from '@/App';
 import { useToast } from '@/hooks/use-toast';
-import { KeyRound, Loader2, Building, Briefcase, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video, Receipt, Wrench, Calendar } from 'lucide-react'; // Added Calendar Icon
+import { KeyRound, Loader2, Building, Cloud, Network, UserSquare, AppWindow, FolderKanban, Search, Video, Wrench, Calendar } from 'lucide-react'; 
 import { Socket } from 'socket.io-client';
 import { Separator } from '../ui/separator';
 import {
@@ -67,18 +67,12 @@ const getInitialFormData = (): Profile => ({
   meeting: {
     zsoid: '',
   },
-  expense: {
-    orgId: '',
-    testModuleName: 'cm_testmodule'
-  },
   fsm: {
     orgId: '',
   },
-  // --- ADDED BOOKINGS ---
   bookings: {
     workspaceId: ''
   }
-  // ----------------------
 });
 
 
@@ -105,11 +99,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 creator: { ...getInitialFormData().creator, ...profile.creator },
                 projects: { ...getInitialFormData().projects, ...profile.projects },
                 meeting: { ...getInitialFormData().meeting, ...profile.meeting },
-                expense: { ...getInitialFormData().expense, ...profile.expense },
                 fsm: { ...getInitialFormData().fsm, ...profile.fsm },
-                // --- ADDED BOOKINGS ---
                 bookings: { ...getInitialFormData().bookings, ...profile.bookings },
-                // ----------------------
             });
         } else {
             setFormData(getInitialFormData());
@@ -179,8 +170,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Updated type definition to include 'bookings'
-  const handleNestedChange = (service: 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense' | 'fsm' | 'bookings', e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNestedChange = (service: 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'fsm' | 'bookings', e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
         ...prev,
@@ -381,26 +371,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 </div>
               </div>
 
-              {/* --- ZOHO EXPENSE SETTINGS --- */}
-              <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Zoho Expense Settings
-                </h4>
-                <div className="grid gap-4 pl-4 border-l-2 ml-2">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="expense_orgId" className="text-right">Org ID</Label>
-                    <Input id="expense_orgId" name="orgId" value={formData.expense?.orgId || ''} onChange={(e) => handleNestedChange('expense', e)} className="col-span-3" placeholder="e.g., 600012345" />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="expense_testModuleName" className="text-right">Test Module</Label>
-                    <Input id="expense_testModuleName" name="testModuleName" value={formData.expense?.testModuleName || ''} onChange={(e) => handleNestedChange('expense', e)} className="col-span-3" placeholder="e.g., cm_testmodule" />
-                    </div>
-                </div>
-              </div>
-
             </div>
-
+           
+            {/* --- COLUMN 2 --- */}
+            <div className="space-y-6">
+              
               {/* --- ZOHO FSM SETTINGS --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">
@@ -415,7 +390,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 </div>
               </div>
 
-               {/* --- ZOHO BOOKINGS SETTINGS (NEW) --- */}
+               {/* --- ZOHO BOOKINGS SETTINGS --- */}
               <div>
                 <h4 className="text-sm font-semibold mb-4 flex items-center">
                   <Calendar className="h-4 w-4 mr-2" />
@@ -428,7 +403,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                     </div>
                 </div>
               </div>
-              {/* ------------------------------------- */}
              
               {/* --- ZOHO QNTRL SETTINGS --- */}
               <div>
