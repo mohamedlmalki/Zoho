@@ -7,7 +7,6 @@ const cors = require('cors');
 const crypto = require('crypto');
 const { readProfiles, writeProfiles, parseError, getValidAccessToken, makeApiCall, createJobId } = require('./utils');
 const deskHandler = require('./desk-handler');
-const inventoryHandler = require('./inventory-handler');
 const catalystHandler = require('./catalyst-handler');
 const qntrlHandler = require('./qntrl-handler');
 const peopleHandler = require('./people-handler');
@@ -29,7 +28,6 @@ const REDIRECT_URI = `http://localhost:${port}/api/zoho/callback`;
 // Register active jobs object with all handlers
 const activeJobs = {};
 deskHandler.setActiveJobs(activeJobs);
-inventoryHandler.setActiveJobs(activeJobs);
 catalystHandler.setActiveJobs(activeJobs);
 qntrlHandler.setActiveJobs(activeJobs);
 peopleHandler.setActiveJobs(activeJobs);
@@ -61,7 +59,6 @@ app.post('/api/zoho/auth', (req, res) => {
     // Combined scopes
     const combinedScopes = [
         'Desk.tickets.ALL,Desk.settings.ALL,Desk.basic.READ',
-        'ZohoInventory.contacts.ALL,ZohoInventory.invoices.ALL,ZohoInventory.settings.ALL,ZohoInventory.settings.UPDATE,ZohoInventory.settings.READ',
         'ZohoCatalyst.projects.users.CREATE,ZohoCatalyst.projects.users.READ,ZohoCatalyst.projects.users.DELETE,ZohoCatalyst.email.CREATE',
         'Qntrl.job.ALL,Qntrl.user.READ,Qntrl.layout.ALL',
         'ZOHOPEOPLE.organization.READ,ZOHOPEOPLE.employee.ALL,ZOHOPEOPLE.forms.ALL',
@@ -179,15 +176,6 @@ app.post('/api/tickets/verify', async (req, res) => {
     }
 });
 
-app.post('/api/invoices/single', async (req, res) => {
-    try {
-        const result = await inventoryHandler.handleSendSingleInvoice(req.body);
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'An unexpected server error occurred.' });
-    }
-});
-
 app.post('/api/catalyst/single', async (req, res) => {
     try {
         const result = await catalystHandler.handleSingleSignup(req.body);
@@ -298,18 +286,7 @@ io.on('connection', (socket) => {
             const tokenResponse = await getValidAccessToken(activeProfile, service);
             let validationData = {};
 
-            if (service === 'inventory') {
-                if (!activeProfile.inventory || !activeProfile.inventory.orgId) {
-                    throw new Error('Inventory Organization ID is not configured for this profile.');
-                }
-                const orgsResponse = await makeApiCall('get', '/v1/organizations', null, activeProfile, 'inventory');
-                const currentOrg = orgsResponse.data.organizations.find(org => org.organization_id === activeProfile.inventory.orgId);
-                if (!currentOrg) throw new Error('Inventory Organization ID is invalid or does not match this profile.');
-                validationData = { 
-                    orgName: currentOrg.name, 
-                    agentInfo: { firstName: currentOrg.contact_name, lastName: '' } 
-                };
-            } else if (service === 'catalyst') {
+            if (service === 'catalyst') {
                 if (!activeProfile.catalyst || !activeProfile.catalyst.projectId) {
                     throw new Error('Catalyst Project ID is not configured for this profile.');
                 }
@@ -493,9 +470,6 @@ io.on('connection', (socket) => {
     
     const deskListeners = { 'startBulkCreate': deskHandler.handleStartBulkCreate, 'getEmailFailures': deskHandler.handleGetEmailFailures, 'clearEmailFailures': deskHandler.handleClearEmailFailures, 'clearTicketLogs': (socket) => require('./utils').writeToTicketLog([]), 'getMailReplyAddressDetails': deskHandler.handleGetMailReplyAddressDetails, 'updateMailReplyAddressDetails': deskHandler.handleUpdateMailReplyAddressDetails };
     for (const [event, handler] of Object.entries(deskListeners)) { socket.on(event, (data) => { const profiles = readProfiles(); const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null; if (activeProfile) handler(socket, { ...data, activeProfile }); }); }
-
-    const inventoryListeners = { 'startBulkInvoice': inventoryHandler.handleStartBulkInvoice, 'getOrgDetails': inventoryHandler.handleGetOrgDetails, 'updateOrgDetails': inventoryHandler.handleUpdateOrgDetails, 'getInvoices': inventoryHandler.handleGetInvoices, 'deleteInvoices': inventoryHandler.handleDeleteInvoices };
-    for (const [event, handler] of Object.entries(inventoryListeners)) { socket.on(event, (data) => { const profiles = readProfiles(); const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null; if (activeProfile) handler(socket, { ...data, activeProfile }); }); }
     
     const catalystListeners = { 'startBulkSignup': catalystHandler.handleStartBulkSignup, 'startBulkEmail': catalystHandler.handleStartBulkEmail, 'getUsers': catalystHandler.handleGetUsers, 'deleteUser': catalystHandler.handleDeleteUser, 'deleteUsers': catalystHandler.handleDeleteUsers };
     for (const [event, handler] of Object.entries(catalystListeners)) { socket.on(event, (data) => { const profiles = readProfiles(); const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null; if (activeProfile) handler(socket, { ...data, activeProfile }); }); }

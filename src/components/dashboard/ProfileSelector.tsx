@@ -27,7 +27,7 @@ type ApiStatus = {
 
 type AllJobs = TicketJobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs | FsmContactJobs | FsmInvoiceJobs | BookingJobs | any;
 
-type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'fsm' | 'bookings';
+type ServiceType = 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'fsm' | 'bookings';
 
 interface ProfileSelectorProps {
   profiles: Profile[];
@@ -79,7 +79,6 @@ export const ProfileSelector: React.FC<ProfileSelectorProps> = ({
     const strictlyFiltered = profiles.filter(p => {
       if (!service) return true;
       if (service === 'desk') return p.desk && p.desk.orgId;
-      if (service === 'inventory') return p.inventory && p.inventory.orgId;
       if (service === 'catalyst') return p.catalyst && p.catalyst.projectId;
       if (service === 'qntrl') return p.qntrl && p.qntrl.orgId;
       if (service === 'people') return p.people && p.people.orgId;

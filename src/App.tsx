@@ -12,10 +12,7 @@ import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import SingleTicket from "@/pages/SingleTicket";
 import { ProfileModal } from '@/components/dashboard/ProfileModal';
-import BulkInvoices from '@/pages/BulkInvoices';
-import SingleInvoice from '@/pages/SingleInvoice';
 import EmailStatics from "@/pages/EmailStatics";
-import { InvoiceResult } from '@/components/dashboard/inventory/InvoiceResultsDisplay';
 import { useJobTimer } from '@/hooks/useJobTimer';
 import BulkSignup from './pages/BulkSignup';
 import SingleSignup from './pages/SingleSignup';
@@ -50,9 +47,6 @@ export interface Profile {
     defaultDepartmentId: string;
     fromEmailAddress?: string;
     mailReplyAddressId?: string;
-  };
-  inventory?: {
-    orgId: string;
   };
   catalyst?: {
     projectId: string;
@@ -1211,30 +1205,7 @@ const MainApp = () => {
                             />
                         }
                     />
-                    <Route
-                        path="/bulk-invoices"
-                        element={
-                           <BulkInvoices
-                                jobs={invoiceJobs}
-                                setJobs={setInvoiceJobs}
-                                socket={socketRef.current}
-                                createInitialJobState={createInitialInvoiceJobState}
-                                onAddProfile={handleOpenAddProfile}
-                                onEditProfile={handleOpenEditProfile}
-                                onDeleteProfile={handleDeleteProfile}
-                           />
-                        }
-                    />
-                    <Route
-                        path="/single-invoice"
-                        element={
-                            <SingleInvoice
-                                onAddProfile={handleOpenAddProfile}
-                                onEditProfile={handleOpenEditProfile}
-                                onDeleteProfile={handleDeleteProfile}
-                            />
-                        }
-                    />
+                   
                       <Route
                         path="/email-statics"
                         element={

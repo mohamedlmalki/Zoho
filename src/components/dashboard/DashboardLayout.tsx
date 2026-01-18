@@ -20,7 +20,7 @@ type ApiStatus = {
 // Added FsmContactJobs, FsmInvoiceJobs
 type AllJobs = Jobs | InvoiceJobs | CatalystJobs | EmailJobs | QntrlJobs | PeopleJobs | CreatorJobs | ProjectsJobs | WebinarJobs | FsmContactJobs | FsmInvoiceJobs;
 // --- 2. UPDATE SERVICE TYPE ---
-type ServiceType = 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense' | 'fsm' | 'bookings';
+type ServiceType = 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense' | 'fsm' | 'bookings';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -216,22 +216,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
 
               <SidebarDivider />
-             
-               <div>
-                <h3 className="px-3 text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Zoho Inventory</h3>
-                <SidebarNavLink to="/bulk-invoices">
-                  <Package className="h-4 w-4" />
-                  Bulk Invoices
-                </SidebarNavLink>
-                <SidebarNavLink to="/single-invoice">
-                  <Package className="h-4 w-4" />
-                  Single Invoice
-                </SidebarNavLink>
-                <SidebarNavLink to="/email-statics">
-                  <BarChart3 className="h-4 w-4" />
-                  Email Statics
-                </SidebarNavLink>
-              </div>
              
              <div>
                 <SidebarDivider />

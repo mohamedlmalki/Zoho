@@ -82,7 +82,6 @@ const getValidAccessToken = async (profile, service) => {
     
     const scopes = {
         desk: 'Desk.tickets.ALL,Desk.settings.ALL,Desk.basic.READ',
-        inventory: 'ZohoInventory.contacts.ALL,ZohoInventory.invoices.ALL,ZohoInventory.settings.ALL',
         catalyst: 'ZohoCatalyst.projects.users.CREATE,ZohoCatalyst.projects.users.READ,ZohoCatalyst.projects.users.DELETE,ZohoCatalyst.email.CREATE',
         qntrl: 'Qntrl.job.ALL,Qntrl.user.READ,Qntrl.layout.ALL',
         people: 'ZOHOPEOPLE.organization.READ,ZOHOPEOPLE.employee.ALL,ZOHOPEOPLE.forms.ALL',
@@ -158,7 +157,6 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     else {
         const baseUrls = {
             desk: 'https://desk.zoho.com', 
-            inventory: 'https://www.zohoapis.com/inventory',
             catalyst: 'https://api.catalyst.zoho.com',
             qntrl: 'https://coreapi.qntrl.com',
             people: 'https://people.zoho.com',
@@ -187,10 +185,6 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     
     const params = { ...queryParams }; 
     
-    if (service === 'inventory' && profile.inventory?.orgId) {
-        params.organization_id = profile.inventory.orgId;
-    }
-
     if (service === 'expense' && profile.expense?.orgId) {
         params.organization_id = profile.expense.orgId;
         headers['X-com-zoho-expense-organizationid'] = profile.expense.orgId;

@@ -46,9 +46,6 @@ const getInitialFormData = (): Profile => ({
     fromEmailAddress: '',
     mailReplyAddressId: '',
   },
-  inventory: {
-    orgId: '',
-  },
   catalyst: {
     projectId: '',
     fromEmail: '', 
@@ -102,7 +99,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 ...getInitialFormData(),
                 ...profile,
                 desk: { ...getInitialFormData().desk, ...profile.desk },
-                inventory: { ...getInitialFormData().inventory, ...profile.inventory },
                 catalyst: { ...getInitialFormData().catalyst, ...profile.catalyst },
                 qntrl: { ...getInitialFormData().qntrl, ...profile.qntrl },
                 people: { ...getInitialFormData().people, ...profile.people },
@@ -184,7 +180,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
   };
 
   // Updated type definition to include 'bookings'
-  const handleNestedChange = (service: 'desk' | 'inventory' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense' | 'fsm' | 'bookings', e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNestedChange = (service: 'desk' | 'catalyst' | 'qntrl' | 'people' | 'creator' | 'projects' | 'meeting' | 'expense' | 'fsm' | 'bookings', e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
         ...prev,
@@ -404,22 +400,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
               </div>
 
             </div>
-           
-            {/* --- COLUMN 2 --- */}
-            <div className="space-y-6">
-              {/* --- ZOHO INVENTORY SETTINGS --- */}
-              <div>
-                <h4 className="text-sm font-semibold mb-4 flex items-center">
-                  <Briefcase className="h-4 w-4 mr-2" />
-                  Zoho Inventory Settings
-                </h4>
-                <div className="grid gap-4 pl-4 border-l-2 ml-2">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="inventory_orgId" className="text-right">Org ID</Label>
-                    <Input id="inventory_orgId" name="orgId" value={formData.inventory?.orgId || ''} onChange={(e) => handleNestedChange('inventory', e)} className="col-span-3" />
-                    </div>
-                </div>
-              </div>
 
               {/* --- ZOHO FSM SETTINGS --- */}
               <div>
