@@ -1,0 +1,117 @@
+[
+  {
+    "profileName": "1",
+    "clientId": "1000.WHQRAO6T9KHM2PC1ZW2R68BU7P8G4A",
+    "clientSecret": "21b30f70a6dfd83088acc650a6c7f3be55b17ff2ac",
+    "refreshToken": "1000.f1724ac270de7eaeaf9bdba7a8b88761.d609d147d25fd1a410b6430d40c3b52c",
+    "inventory": {
+      "orgId": "910825903",
+      "customModuleApiName": "cm_testmodule1",
+      "note": "helpedhadawx@hotmail.com"
+    },
+    "expense": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    }
+  },
+  {
+    "profileName": "EXP 1",
+    "clientId": "1000.WHQRAO6T9KHM2PC1ZW2R68BU7P8G4A",
+    "clientSecret": "21b30f70a6dfd83088acc650a6c7f3be55b17ff2ac",
+    "refreshToken": "1000.10c44ab306b714a55a0dcdda4fb94b30.d3a543c5e516c75a3fa91804b68bcbd9",
+    "inventory": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "expense": {
+      "orgId": "910825903",
+      "customModuleApiName": "cm_ttt",
+      "note": "helpedhadawx@hotmail.com\n\n"
+    },
+    "books": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "billing": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    }
+  },
+  {
+    "profileName": "books1",
+    "clientId": "1000.BTS99KXVF1GR668APUDO2I7CXSCKBP",
+    "clientSecret": "623bcdc7061a60f5caecb1df256ebd9392855e12d6",
+    "refreshToken": "1000.ec368a1702b8936d343e67b3b66c6fcb.9bca019f3d72bf0c3a059d777eabf770",
+    "inventory": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "books": {
+      "orgId": "910825903",
+      "customModuleApiName": "cm_itrek",
+      "note": "helpedhadawx@hotmail.com\n\n"
+    },
+    "expense": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    }
+  },
+  {
+    "profileName": "books 2",
+    "clientId": "1000.BTS99KXVF1GR668APUDO2I7CXSCKBP",
+    "clientSecret": "623bcdc7061a60f5caecb1df256ebd9392855e12d6",
+    "refreshToken": "1000.a30bb266145e72e1f6003bf126545765.cd04fb1020cedf19281a1f576d6ca6fd",
+    "inventory": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "books": {
+      "orgId": "911078647",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "billing": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "expense": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    }
+  },
+  {
+    "profileName": "BILLING 1",
+    "clientId": "1000.S6VJKOXO97HR6UVIRGDCS4579XCX0D",
+    "clientSecret": "980eddcf80849a9ecf26432583675b057fb6661b3d",
+    "refreshToken": "1000.1ef03658f567142070989dbf4132c401.7f8190a28cd40eeb4c17f3a3e5ebdf96",
+    "inventory": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "books": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    },
+    "billing": {
+      "orgId": "910825903",
+      "customModuleApiName": "cm_trtrtr",
+      "note": ""
+    },
+    "expense": {
+      "orgId": "",
+      "customModuleApiName": "",
+      "note": ""
+    }
+  }
+]

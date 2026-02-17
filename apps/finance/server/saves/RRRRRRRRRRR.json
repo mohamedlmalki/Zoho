@@ -1,0 +1,353 @@
+{
+  "invoiceJobs": {},
+  "booksJobs": {},
+  "booksContactJobs": {},
+  "billingJobs": {},
+  "billingContactJobs": {},
+  "billingCustomJobs": {},
+  "customJobs": {},
+  "booksCustomJobs": {
+    "books1": {
+      "formData": {
+        "moduleApiName": "cm_itrek",
+        "bulkField": "cf_email",
+        "bulkData": "med217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nyassintaziyasin@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nyassintaziyasin@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nyassintaziyasin@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nyassintaziyasin@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nyassintaziyasin@outlook.com\nyassp123400@outlook.com\nabdullahalha1258@outlook.com\nkorhonenbivirtanen@outlook.com\nkariemckinley@outlook.com\ncolettesenger19254@outlook.com\nspezioouditori@outlook.com\nposterfr144@outlook.com\nsergiogonza145@outlook.com\nerinpeters1980@hotmail.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\namandavianmartins@hotmail.com\nANTONIOLGONCALVES148@hotmail.com\nmarcositntre@outlook.com\nMARIAMNASIRA@outlook.com\nrcamayk@gmail.com\nmaykrcasp@gmail.com\nyassintaziyasin@gmail.com\nsarlofrua@gmail.com\nzakiyassin1990@gmail.com\nmaazouziaymane9@gmail.com\ni4tj0lwcz@mozmail.com\nqnthot2xh@mozmail.com\n1czv4r0ti@mozmail.com\nmed217623@gmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com\nmohamedlmalki@yahoo.com\nkuimaretmoh@hotmail.com\namal_alamoud_sa@hotmail.com\nananesic12432@hotmail.com\namandavianmartins@hotmail.com\nEliasNascimento143@hotmail.com",
+        "staticData": {
+          "cf_subejct": "fffffffffff"
+        },
+        "delay": 1,
+        "availableFields": [
+          {
+            "label": "a",
+            "api_name": "cf_a",
+            "data_type": "autonumber",
+            "is_mandatory": true
+          },
+          {
+            "label": "Email",
+            "api_name": "cf_email",
+            "data_type": "email",
+            "is_mandatory": false
+          },
+          {
+            "label": "Subejct",
+            "api_name": "cf_subejct",
+            "data_type": "string",
+            "is_mandatory": false
+          }
+        ],
+        "concurrency": 2,
+        "stopAfterFailures": 0
+      },
+      "results": [
+        {
+          "rowNumber": 1,
+          "identifier": "med217623@gmail.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:31.750Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000741005",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:44-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:44-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "med217623@gmail.com",
+              "cf_email_formatted": "med217623@gmail.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "557",
+              "cf_a_formatted": "557",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "557",
+              "record_name_formatted": "557"
+            }
+          }
+        },
+        {
+          "rowNumber": 2,
+          "identifier": "mohamedlmalki@yahoo.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:31.892Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000729005",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:44-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:44-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "mohamedlmalki@yahoo.com",
+              "cf_email_formatted": "mohamedlmalki@yahoo.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "558",
+              "cf_a_formatted": "558",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "558",
+              "record_name_formatted": "558"
+            }
+          }
+        },
+        {
+          "rowNumber": 3,
+          "identifier": "yassintaziyasin@outlook.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:33.345Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000726056",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:46-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:46-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "yassintaziyasin@outlook.com",
+              "cf_email_formatted": "yassintaziyasin@outlook.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "559",
+              "cf_a_formatted": "559",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "559",
+              "record_name_formatted": "559"
+            }
+          }
+        },
+        {
+          "rowNumber": 4,
+          "identifier": "yassp123400@outlook.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:33.436Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000757001",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:46-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:46-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "yassp123400@outlook.com",
+              "cf_email_formatted": "yassp123400@outlook.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "560",
+              "cf_a_formatted": "560",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "560",
+              "record_name_formatted": "560"
+            }
+          }
+        },
+        {
+          "rowNumber": 5,
+          "identifier": "abdullahalha1258@outlook.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:34.863Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000747052",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:47-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:47-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "abdullahalha1258@outlook.com",
+              "cf_email_formatted": "abdullahalha1258@outlook.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "561",
+              "cf_a_formatted": "561",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "561",
+              "record_name_formatted": "561"
+            }
+          }
+        },
+        {
+          "rowNumber": 6,
+          "identifier": "korhonenbivirtanen@outlook.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:34.984Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000731064",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:47-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:47-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "korhonenbivirtanen@outlook.com",
+              "cf_email_formatted": "korhonenbivirtanen@outlook.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "562",
+              "cf_a_formatted": "562",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "562",
+              "record_name_formatted": "562"
+            }
+          }
+        },
+        {
+          "rowNumber": 7,
+          "identifier": "kariemckinley@outlook.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:36.520Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000738009",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:49-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:49-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "kariemckinley@outlook.com",
+              "cf_email_formatted": "kariemckinley@outlook.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "563",
+              "cf_a_formatted": "563",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "563",
+              "record_name_formatted": "563"
+            }
+          }
+        },
+        {
+          "rowNumber": 8,
+          "identifier": "colettesenger19254@outlook.com",
+          "stage": "complete",
+          "details": "Created.",
+          "success": true,
+          "profileName": "books1",
+          "timestamp": "2026-01-11T16:53:37.434Z",
+          "response": {
+            "code": 0,
+            "message": "itrek is created successfully.",
+            "module_record": {
+              "module_record_id": "7953131000000758001",
+              "module_api_name": "cm_itrek",
+              "last_modified_time": "2026-01-11T11:53:49-0500",
+              "last_modified_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_time": "2026-01-11T11:53:49-0500",
+              "created_time_formatted": "11 Jan 2026 11:53 AM",
+              "created_by_id": "7953131000000093001",
+              "last_modified_by_id": "7953131000000093001",
+              "status": "draft",
+              "status_formatted": "Draft",
+              "cf_email": "colettesenger19254@outlook.com",
+              "cf_email_formatted": "colettesenger19254@outlook.com",
+              "cf_subejct": "fffffffffff",
+              "cf_subejct_formatted": "fffffffffff",
+              "cf_a": "564",
+              "cf_a_formatted": "564",
+              "record_created_by": "7953131000000093001",
+              "record_created_by_formatted": "helpedhadawx",
+              "record_last_modified_by": "7953131000000093001",
+              "record_last_modified_by_formatted": "helpedhadawx",
+              "record_name": "564",
+              "record_name_formatted": "564"
+            }
+          }
+        }
+      ],
+      "isProcessing": true,
+      "isPaused": false,
+      "isComplete": false,
+      "processingStartTime": "2026-01-11T16:53:30.829Z",
+      "processingTime": 7,
+      "totalToProcess": 455,
+      "countdown": 0,
+      "currentDelay": 1,
+      "filterText": ""
+    }
+  },
+  "expenseJobs": {},
+  "timestamp": "2026-01-11T16:53:37.799Z"
+}
