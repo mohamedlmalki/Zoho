@@ -1,5 +1,3 @@
-// --- FILE: apps/ops/server/utils.js ---
-
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -16,7 +14,7 @@ const tokenCache = {};
 const readProfiles = () => { try { if (fs.existsSync(PROFILES_PATH)) { return JSON.parse(fs.readFileSync(PROFILES_PATH)); } } catch (e) { console.error(e); } return []; };
 const writeProfiles = (profiles) => { try { fs.writeFileSync(PROFILES_PATH, JSON.stringify(profiles, null, 2)); } catch (e) { console.error(e); } };
 const readTicketLog = () => { try { if (fs.existsSync(TICKET_LOG_PATH)) { return JSON.parse(fs.readFileSync(TICKET_LOG_PATH)); } } catch (e) { console.error(e); } return []; };
-const writeToTicketLog = (newEntry) => { const log = readTicketLog(); log.push(newEntry); try { fs.writeFileSync(TICKET_LOG_PATH, JSON.stringify(log, null, 2)); } catch (e) { console.error(e); } };
+const writeToTicketLog = (newEntry) => { const log = readTicketLog(); log.push(newEntry); try { fs.writeFileSync(TICKET_LOG_PATH, JSON.stringify(log, null, 2)); } catch (e) { console.error(e); } return []; };
 const createJobId = (socketId, profileName, jobType) => `${socketId}_${profileName}_${jobType}`;
 
 const parseError = (error) => {
@@ -70,11 +68,18 @@ const getValidAccessToken = async (profile, service) => {
 };
 
 // --- 🧠 SMART LOGGING HELPER ---
-function extractDetails(service, data) {
+function extractDetails(service, data, logExtras) {
     if (!data) return "No Data Payload";
     if (data instanceof FormData) return "📦 FormData Payload (File Upload)";
     
-    let cleanData = data.data || data;
+    // Normalize Data
+    let cleanData = data;
+    if (data instanceof URLSearchParams) {
+        cleanData = Object.fromEntries(data);
+    } else if (data.data) {
+        cleanData = data.data; 
+    }
+
     if (Array.isArray(cleanData)) {
         if (cleanData.length === 0) return "Empty Data Array";
         cleanData = cleanData[0]; 
@@ -86,10 +91,36 @@ function extractDetails(service, data) {
         return foundKey ? obj[foundKey] : null;
     };
 
+    // --- 🔹 UPDATED QNTRL LOGIC: Dynamic Fields with Labels ---
     if (service === 'qntrl') {
-        const title = get(cleanData, 'title') || get(cleanData, 'job_name') || get(cleanData, 'card_name') || "Unknown Job";
-        return `📇 Qntrl Job: ${title}`;
+        const ignoredKeys = ['layout_id', 'auth_token', 'authtoken', 'scope'];
+
+        const details = Object.entries(cleanData)
+            .filter(([key, value]) => !ignoredKeys.includes(key) && value) 
+            .map(([key, value]) => {
+                // Try exact match first, then lowercase match
+                let label = null;
+                if (logExtras) {
+                     label = logExtras[key] || logExtras[key.toLowerCase()];
+                     // Debug missing keys
+                     if (!label) {
+                         // console.log(`[LOG DEBUG] Key "${key}" not found in Map.`);
+                     }
+                }
+                
+                // Format: Label (api_name): value
+                if (label) {
+                    return `${label}: ${value}`;
+                }
+                // Fallback: api_name: value
+                return `${key}: ${value}`;
+            })
+            .join(' | ');
+
+        return `📇 Qntrl Job: ${details || "Unknown Job"}`;
     }
+    // ---------------------------------------------
+
     if (service === 'fsm') {
         const name = get(cleanData, 'last_name') || get(cleanData, 'lastname') || get(cleanData, 'contactName') || get(cleanData, 'name') || "Unknown Name";
         const email = get(cleanData, 'email') || get(cleanData, 'secondaryEmail') || "No Email";
@@ -114,12 +145,11 @@ function extractDetails(service, data) {
     return `Payload Keys: ${Object.keys(cleanData).join(', ')}`;
 }
 
-// --- RESTORED & DEBUGGED makeApiCall ---
-const makeApiCall = async (method, relativeUrl, data, profile, service, queryParams = {}) => {
+// --- UPDATED makeApiCall to accept logExtras ---
+const makeApiCall = async (method, relativeUrl, data, profile, service, queryParams = {}, logExtras = null) => {
     const tokenResponse = await getValidAccessToken(profile, service);
     const accessToken = tokenResponse.access_token;
     
-    // 1. Build URL
     const serviceConfig = profile[service];
     const baseUrls = {
         desk: 'https://desk.zoho.com', catalyst: 'https://api.catalyst.zoho.com', qntrl: 'https://coreapi.qntrl.com',
@@ -131,16 +161,12 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
     if (service === 'creator') fullUrl = `https://${serviceConfig.baseUrl}/creator/v2.1${relativeUrl}`;
     else fullUrl = `${baseUrls[service]}${relativeUrl}`;
 
-    // 2. Prepare Headers
     const headers = { 'Authorization': `Zoho-oauthtoken ${accessToken}` };
     if (service === 'desk' && profile.desk?.orgId) headers['orgId'] = profile.desk.orgId;
     if (service === 'fsm' && profile.fsm?.orgId) headers['X-FSM-ORG-ID'] = profile.fsm.orgId;
     
-    // 3. Prepare Data (RESTORED ORIGINAL LOGIC)
     let requestData = data;
     
-    // Only force JSON for specific services where we KNOW it is required
-    // I REMOVED 'qntrl' from this list to restore previous behavior
     if ((['creator','meeting','fsm'].includes(service)) && ['post','put','patch'].includes(method.toLowerCase())) {
         headers['Content-Type'] = 'application/json';
     }
@@ -155,27 +181,31 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
 
     const axiosConfig = { method, url: fullUrl, data: requestData, headers, params: queryParams };
 
-    // --- 🔴 DEBUG LOGS (Shows in your Terminal) ---
+    // --- 🔴 DEBUG LOGS ---
     console.log(`\n>>> 🚀 SENDING [${service.toUpperCase()}] REQUEST >>>`);
     console.log(`URL: ${method.toUpperCase()} ${fullUrl}`);
-    console.log("HEADERS:", JSON.stringify(headers, (k,v) => k=='Authorization' ? '***' : v, 2));
-    if (!(data instanceof FormData)) {
-        console.log("BODY:", JSON.stringify(data, null, 2));
-    } else {
-        console.log("BODY: [FormData Object]");
+    // console.log("HEADERS:", JSON.stringify(headers, (k,v) => k=='Authorization' ? '***' : v, 2));
+    
+    if (logExtras && Object.keys(logExtras).length > 0) {
+        // console.log("LOG EXTRAS (Field Map) Loaded:", Object.keys(logExtras).length, "keys.");
     }
-    console.log("------------------------------------------\n");
-    // ---------------------------------------------
 
-    // Worker Logic
     const isWriteAction = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
     
     try {
         const response = await axios(axiosConfig);
 
         if (isWriteAction) {
-            const summary = extractDetails(service, data);
-            const logBody = (data instanceof FormData) ? { info: "FormData Object (Hidden)" } : data;
+            // --- PASS logExtras HERE ---
+            const summary = extractDetails(service, data, logExtras);
+            
+            let logBody = data;
+            if (data instanceof FormData) {
+                logBody = { info: "FormData Object (Hidden)" };
+            } else if (data instanceof URLSearchParams) {
+                logBody = Object.fromEntries(data);
+            }
+
             const logEntry = {
                 source: `zoho-${service}`,
                 method: method.toUpperCase(),
@@ -189,14 +219,20 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
         return response;
 
     } catch (error) {
-        // Log Error to Worker
+        let logBody = data;
+        if (data instanceof FormData) {
+            logBody = "FormData";
+        } else if (data instanceof URLSearchParams) {
+            logBody = Object.fromEntries(data);
+        }
+
         const errorLog = {
             source: `zoho-${service}-error`,
             method: method.toUpperCase(),
             path: fullUrl,
             status: error.response ? error.response.status : 500,
             error: error.message,
-            body: (data instanceof FormData) ? "FormData" : data,
+            body: logBody,
             summary: "❌ Failed Request"
         };
         axios.post(WORKER_URL, errorLog).catch(() => {});
