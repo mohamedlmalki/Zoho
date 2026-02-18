@@ -1,10 +1,11 @@
-// --- FILE: server/index.js ---
+// --- FILE: apps/ops/server/index.js ---
 
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const cors = require('cors');
 const crypto = require('crypto');
+const axios = require('axios'); // Ensure you ran: npm install axios
 const { readProfiles, writeProfiles, parseError, getValidAccessToken, makeApiCall, createJobId } = require('./utils');
 const deskHandler = require('./desk-handler');
 const catalystHandler = require('./catalyst-handler');
@@ -14,15 +15,17 @@ const creatorHandler = require('./creator-handler');
 const projectsHandler = require('./projects-handler');
 const meetingHandler = require('./meeting-handler');
 const fsmHandler = require('./fsm-handler'); 
-const bookingsHandler = require('./bookings-handler'); // --- ADDED BOOKINGS HANDLER
+const bookingsHandler = require('./bookings-handler'); 
 require('dotenv').config();
+
+// --- 🔴 PASTE YOUR WORKER URL HERE 🔴 ---
+const WORKER_URL = "https://zoho-ops-logger.arfilm47.workers.dev"; 
+const PORT = process.env.PORT || 3000;
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "http://localhost:8080" } });
-
-const port = process.env.PORT || 3000;
-const REDIRECT_URI = `http://localhost:${port}/api/zoho/callback`;
+const REDIRECT_URI = `http://localhost:${PORT}/api/zoho/callback`;
 
 // Register active jobs object with all handlers
 const activeJobs = {};
@@ -34,13 +37,13 @@ creatorHandler.setActiveJobs(activeJobs);
 projectsHandler.setActiveJobs(activeJobs);
 meetingHandler.setActiveJobs(activeJobs);
 fsmHandler.setActiveJobs(activeJobs); 
-bookingsHandler.setActiveJobs(activeJobs); // --- ADDED BOOKINGS JOBS
-
+bookingsHandler.setActiveJobs(activeJobs);
 
 const authStates = {};
 
 app.use(cors());
 app.use(express.json());
+
 
 // --- ZOHO AUTH FLOW ---
 app.post('/api/zoho/auth', (req, res) => {
@@ -110,7 +113,6 @@ app.post('/api/zoho/auth', (req, res) => {
         'ZohoFSM.modules.custom.READ',
         'ZohoFSM.modules.custom.ALL',
         'ZohoFSM.modules.custom.CREATE',
-        // --- ADDED BOOKINGS SCOPE ---
         'zohobookings.data.CREATE'
     ].join(',');
     
@@ -136,7 +138,6 @@ app.get('/api/zoho/callback', async (req, res) => {
         params.append('redirect_uri', REDIRECT_URI);
         params.append('grant_type', 'authorization_code');
         
-        const axios = require('axios');
         const response = await axios.post(tokenUrl, params);
         const { refresh_token } = response.data;
 
@@ -154,7 +155,7 @@ app.get('/api/zoho/callback', async (req, res) => {
     }
 });
 
-// --- REST ENDPOINTS (for single actions) ---
+// --- REST ENDPOINTS ---
 app.post('/api/tickets/single', async (req, res) => {
     try {
         const result = await deskHandler.handleSendSingleTicket(req.body);
@@ -370,12 +371,10 @@ io.on('connection', (socket) => {
                     agentInfo: { firstName: 'Connected', lastName: '' }
                 };
             }
-            // --- ADDED BOOKINGS STATUS CHECK ---
             else if (service === 'bookings') {
                 if (!activeProfile.bookings || !activeProfile.bookings.workspaceId) {
                     throw new Error('Bookings Workspace ID is not configured for this profile.');
                 }
-                // Check if we can fetch services (verifies workspace ID)
                 await makeApiCall('get', '/services', { workspace_id: activeProfile.bookings.workspaceId }, activeProfile, 'bookings');
                 
                 validationData = {
@@ -425,9 +424,8 @@ io.on('connection', (socket) => {
         projectsHandler.handleGetPortals(socket, data);
     });
 	
-	// --- DELETE SERVICE LISTENER (FIXED) ---
     socket.on('deleteBookingService', (data) => {
-        const profiles = readProfiles(); // Use readProfiles instead of getProfile
+        const profiles = readProfiles();
         const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
         
         if (activeProfile) {
@@ -460,7 +458,6 @@ io.on('connection', (socket) => {
     const meetingListeners = { 'fetchWebinars': meetingHandler.handleGetWebinars, 'startBulkRegistration': meetingHandler.handleStartBulkRegistration };
     for (const [event, handler] of Object.entries(meetingListeners)) { socket.on(event, (data) => { const profiles = readProfiles(); const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null; if (activeProfile) { if (typeof handler === 'function') { handler(socket, { ...data, activeProfile }); } else { console.error(`[ERROR] Handler for event '${event}' is not a function.`); socket.emit('bulkError', { message: `Server error: Event ${event} is not configured.` }); } } else { socket.emit('bulkError', { message: 'Active profile not found.' }); } }); }
 
-    // --- FSM LISTENERS ---
     const fsmListeners = { 
         'startBulkFsmContact': fsmHandler.handleStartBulkCreateContact,
     };
@@ -476,7 +473,6 @@ io.on('connection', (socket) => {
         }); 
     }
 
-    // --- ADDED BOOKINGS LISTENERS ---
     socket.on('fetchBookingServices', (data) => { 
         const profiles = readProfiles(); 
         const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
@@ -492,8 +488,7 @@ io.on('connection', (socket) => {
         const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
         if(activeProfile) bookingsHandler.handleStartBulkBooking(socket, { ...data, activeProfile });
     });
-	// --- CREATE SERVICE LISTENER (NEW) ---
-    socket.on('createBookingService', (data) => {
+	socket.on('createBookingService', (data) => {
         const profiles = readProfiles();
         const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
         
@@ -503,14 +498,6 @@ io.on('connection', (socket) => {
             socket.emit('createBookingServiceResult', { success: false, error: "Profile not found." });
         }
     });
-	socket.on('fetchBookingServices', (data) => { 
-        const profiles = readProfiles(); 
-        const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
-        if(activeProfile) bookingsHandler.handleFetchBookingServices(socket, { ...data, activeProfile });
-    });
-    // ... (other existing booking listeners) ...
-
-    // --- ADD THESE NEW LISTENERS ---
     socket.on('fetchAppointments', (data) => {
         const profiles = readProfiles();
         const activeProfile = data ? profiles.find(p => p.profileName === data.selectedProfileName) : null;
@@ -541,7 +528,6 @@ io.on('connection', (socket) => {
     });
 });
 
-
-server.listen(port, () => {
-    console.log(`🚀 Server is running on http://localhost:${port}`);
+server.listen(PORT, () => {
+    console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
