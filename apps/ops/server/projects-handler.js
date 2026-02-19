@@ -1,7 +1,7 @@
-// --- FILE: server/projects-handler.js (YOUR WORKING CODE + NEW FEATURES) ---
+// --- FILE: apps/ops/server/projects-handler.js ---
 
 const { getValidAccessToken, makeApiCall, parseError, createJobId, readProfiles } = require('./utils');
-const { delay } = require('./utils'); // Assuming delay is in utils
+const { delay } = require('./utils'); 
 const axios = require('axios'); 
 
 let activeJobs = {};
@@ -36,7 +36,7 @@ async function getApiNameMap(portalId, projectId, activeProfile) {
         
         apiNameMap["name"] = "name"; 
         
-        console.log(`[SERVER LOG] getApiNameMap: Map created successfully.`);
+        console.log(`[SERVER LOG] getApiNameMap: Map created successfully. Keys: ${Object.keys(apiNameMap).length}`);
         return apiNameMap; 
 
     } catch (error) {
@@ -64,7 +64,7 @@ function buildSmartV3Payload(data, apiNameMap) {
             const apiName = apiNameMap[columnName];
             
             if (apiName) {
-                console.log(`[SERVER LOG] buildSmartV3Payload: Translating ${columnName} -> ${apiName}`);
+                // console.log(`[SERVER LOG] buildSmartV3Payload: Translating ${columnName} -> ${apiName}`);
                 payload[apiName] = value;
             } else {
                 console.warn(`[SERVER LOG] buildSmartV3Payload: No api_name found for ${columnName}. Skipping.`);
@@ -80,7 +80,6 @@ const setActiveJobs = (jobs) => {
     activeJobs = jobs;
 };
 
-// --- Utility function for job control (from your file, UNCHANGED) ---
 const interruptibleSleep = (ms, jobId) => {
     return new Promise(resolve => {
         if (ms <= 0) return resolve();
@@ -100,7 +99,8 @@ const interruptibleSleep = (ms, jobId) => {
     });
 };
 
-// --- UNTOUCHED ORIGINAL FUNCTION ---
+// --- API HANDLERS ---
+
 const handleGetPortals = async (socket, data) => {
     console.log('[SERVER LOG] handleGetPortals triggered.'); 
     const { clientId, clientSecret, refreshToken } = data;
@@ -128,7 +128,6 @@ const handleGetPortals = async (socket, data) => {
     }
 };
 
-// --- UNTOUCHED ORIGINAL FUNCTION ---
 const handleGetProjects = async (socket, data) => {
     console.log('[SERVER LOG] handleGetProjects triggered.'); 
     const { activeProfile } = data;
@@ -162,7 +161,6 @@ const handleGetProjects = async (socket, data) => {
     }
 };
 
-// --- UNTOUCHED ORIGINAL FUNCTION ---
 const handleGetTaskLists = async (socket, data) => {
     console.log('[SERVER LOG] handleGetTaskLists triggered.'); 
     const { activeProfile, projectId } = data;
@@ -198,8 +196,6 @@ const handleGetTaskLists = async (socket, data) => {
     }
 };
 
-
-// --- UNTOUCHED ORIGINAL FUNCTION ---
 const handleGetTasks = async (socket, data) => {
     console.log('[SERVER LOG] handleGetTasks triggered.'); 
     const { activeProfile, queryParams = {} } = data;
@@ -231,7 +227,6 @@ const handleGetTasks = async (socket, data) => {
 
     } catch (error) {
         const { message, fullResponse } = parseError(error);
-        // This is the line I broke before. It is now correct.
         socket.emit('projectsTasksResult', { 
             success: false, 
             error: message,
@@ -241,8 +236,8 @@ const handleGetTasks = async (socket, data) => {
     }
 };
 
-// --- UNTOUCHED "SMART" FUNCTION ---
-const handleCreateSingleTask = async (data) => {
+// --- UPDATED SINGLE TASK HANDLER ---
+const handleCreateSingleTask = async (data, providedMap = null) => {
     const { portalId, projectId, tasklistId, selectedProfileName } = data; 
     
     const profiles = readProfiles();
@@ -255,19 +250,32 @@ const handleCreateSingleTask = async (data) => {
     try {
         const path = `/portal/${portalId}/projects/${projectId}/tasks`;
         
-        console.log(`[SERVER LOG] Getting API Name Map for project ${projectId}...`);
-        const apiNameMap = await getApiNameMap(portalId, projectId, activeProfile);
+        // 1. Get Map (use provided one if available to save time)
+        const apiNameMap = providedMap || await getApiNameMap(portalId, projectId, activeProfile);
         
+        // 2. Build Payload
         const taskData = buildSmartV3Payload(data, apiNameMap);
         
+        // 3. --- NEW: Build Reverse Map for Logging (API Name -> Label) ---
+        // This ensures the logs show "Due Date" instead of "end_date"
+        const reverseMap = {};
+        if (apiNameMap) {
+            Object.entries(apiNameMap).forEach(([label, apiName]) => {
+                // Key = api_name, Value = Label
+                reverseMap[apiName] = label;
+            });
+        }
+        // -----------------------------------------------------------------
+
         console.log(`[SERVER LOG] Sending final V3 "smart" payload to ${path}:`, JSON.stringify(taskData));
 
-        const response = await makeApiCall('post', path, taskData, activeProfile, 'projects');
+        // 4. Pass reverseMap as the last argument (logExtras)
+        const response = await makeApiCall('post', path, taskData, activeProfile, 'projects', {}, reverseMap);
         
         let newTask;
         if (response.data && response.data.id && response.data.name) {
             newTask = response.data;
-        } else if (response.data.tasks && Array.isArray(response.data.tasks) && response.data.tasks.length > 0) { // Fix: Added length check
+        } else if (response.data.tasks && Array.isArray(response.data.tasks) && response.data.tasks.length > 0) {
             newTask = response.data.tasks[0];
         }
 
@@ -293,7 +301,7 @@ const handleCreateSingleTask = async (data) => {
     }
 };
 
-// --- UNTOUCHED ORIGINAL FUNCTION ---
+// --- UPDATED BULK HANDLER (OPTIMIZED) ---
 const handleStartBulkCreateTasks = async (socket, data) => {
     const { formData, selectedProfileName, activeProfile } = data;
     const { 
@@ -305,14 +313,13 @@ const handleStartBulkCreateTasks = async (socket, data) => {
         tasklistId, 
         delay, 
         bulkDefaultData,
-        stopAfterFailures = 0 // --- ADDED DEFAULT ---
+        stopAfterFailures = 0 
     } = formData;
     
     console.log(`[PROJECTS JOB START] Profile: ${selectedProfileName}. Project ID: ${projectId}. Primary Field: ${primaryField}.`);
 
     const jobId = createJobId(socket.id, selectedProfileName, 'projects');
     
-    // Initialize job
     activeJobs[jobId] = { 
         status: 'running',
         consecutiveFailures: 0,
@@ -336,15 +343,18 @@ const handleStartBulkCreateTasks = async (socket, data) => {
         
         const portalId = activeProfile.projects.portalId;
 
+        // --- OPTIMIZATION: Fetch Map ONCE ---
+        console.log('[PROJECTS JOB] Fetching Field Map ONCE for bulk job...');
+        const sharedApiNameMap = await getApiNameMap(portalId, projectId, activeProfile);
+        // ------------------------------------
+
         for (let i = 0; i < tasksToProcess.length; i++) {
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
             
-            // Wait while paused
             while (activeJobs[jobId]?.status === 'paused') {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
 
-            // --- AUTO-PAUSE CHECK ---
             if (activeJobs[jobId].stopAfterFailures > 0 && 
                 activeJobs[jobId].consecutiveFailures >= activeJobs[jobId].stopAfterFailures) {
                  
@@ -359,7 +369,6 @@ const handleStartBulkCreateTasks = async (socket, data) => {
                     await new Promise(resolve => setTimeout(resolve, 500));
                  }
             }
-            // ------------------------
 
             if (i > 0 && delay > 0) await interruptibleSleep(delay * 1000, jobId);
             if (!activeJobs[jobId] || activeJobs[jobId].status === 'ended') break;
@@ -386,13 +395,11 @@ const handleStartBulkCreateTasks = async (socket, data) => {
                 tasklistId,
                 selectedProfileName,
                 bulkDefaultData: dataForThisTask 
-            });
+            }, sharedApiNameMap); // <--- PASS THE MAP HERE
             
             if (result.success) {
-                // Success! Reset counter
                 if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures = 0;
 
-                console.log(`[PROJECTS JOB SUCCESS] Emitting result for: ${currentValue}.`);
                 socket.emit('projectsResult', { 
                     projectName: currentValue, 
                     success: true,
@@ -401,10 +408,8 @@ const handleStartBulkCreateTasks = async (socket, data) => {
                     profileName: selectedProfileName
                 });
             } else {
-                // Failure! Increment counter
                 if (activeJobs[jobId]) activeJobs[jobId].consecutiveFailures++;
 
-                console.error(`[PROJECTS JOB ERROR] Emitting error for: ${currentValue}. Reason: ${result.error}`);
                 socket.emit('projectsResult', { 
                     projectName: currentValue, 
                     success: false, 
@@ -422,10 +427,8 @@ const handleStartBulkCreateTasks = async (socket, data) => {
         if (activeJobs[jobId]) {
             const finalStatus = activeJobs[jobId].status;
             if (finalStatus === 'ended') {
-                console.log('[PROJECTS JOB] Job manually ended.');
                 socket.emit('bulkEnded', { profileName: selectedProfileName, jobType: 'projects' });
             } else {
-                console.log('[PROJECTS JOB] Job successfully completed all tasks.');
                 socket.emit('bulkComplete', { profileName: selectedProfileName, jobType: 'projects' });
             }
             delete activeJobs[jobId];
@@ -433,25 +436,20 @@ const handleStartBulkCreateTasks = async (socket, data) => {
     }
 };
 
-
-// --- UNTOUCHED ORIGINAL FUNCTION ---
 const handleGetTaskLayout = async (socket, data) => {
     console.log('[SERVER LOG] handleGetTaskLayout triggered.');
     const { activeProfile, projectId } = data;
     const portalId = activeProfile.projects?.portalId;
     
     if (!portalId) {
-        console.log('[SERVER LOG] Error: Portal ID is missing from profile.');
         return socket.emit('projectsTaskLayoutResult', { success: false, error: 'Portal ID is missing from profile.' });
     }
     if (!projectId) {
-        console.log('[SERVER LOG] Error: Project ID not provided.');
         return socket.emit('projectsTaskLayoutResult', { success: false, error: 'Project ID not provided.' });
     }
 
     try {
         const { access_token } = await getValidAccessToken(activeProfile, 'projects');
-        
         const domain = 'https://projectsapi.zoho.com';
         const apiUrl = `${domain}/restapi/portal/${portalId}/projects/${projectId}/tasklayouts`;
         
@@ -464,14 +462,12 @@ const handleGetTaskLayout = async (socket, data) => {
         const layout = response.data; 
 
         if (!layout || !layout.layout_id) {
-             console.log('[SERVER LOG] Error: No task layout found in response.');
              throw new Error('No task layout found for this project.');
         }
 
-        console.log(`[SERVER LOG] Successfully fetched layout: ${layout.layout_id}`);
         socket.emit('projectsTaskLayoutResult', { 
             success: true, 
-            data: layout, // Send the layout object
+            data: layout, 
         });
 
     } catch (error) {
@@ -479,11 +475,9 @@ const handleGetTaskLayout = async (socket, data) => {
         let message = error.message;
         let fullResponse = null;
         if (error.response) {
-            console.error('[SERVER LOG] Zoho API Error Details:', JSON.stringify(error.response.data));
-            message = error.response.data?.error?.details?.[0]?.message || error.response.data?.message || error.response.data?.error?.message || error.message;
+            message = error.response.data?.error?.details?.[0]?.message || error.response.data?.message || error.message;
             fullResponse = error.response.data;
         }
-        
         socket.emit('projectsTaskLayoutResult', { 
             success: false, 
             error: message,
@@ -492,31 +486,23 @@ const handleGetTaskLayout = async (socket, data) => {
     }
 };
 
-// --- *** NEW FUNCTION 1: Get Project Details (for v3 API) *** ---
-// This uses a manual axios call because it uses the 'api/v3' path,
-// which is different from all other functions that use 'restapi'.
 const handleGetProjectDetails = async (socket, data) => {
     console.log('[SERVER LOG] handleGetProjectDetails: Triggered with data:', data);
     const { activeProfile, portalId, projectId } = data;
 
     if (!portalId || !projectId) {
-        console.error('[SERVER LOG] handleGetProjectDetails: Aborting. Portal ID or Project ID is missing.');
         return socket.emit('projectsProjectDetailsError', { success: false, error: 'Portal ID or Project ID is missing.' });
     }
 
     try {
         const { access_token } = await getValidAccessToken(activeProfile, 'projects');
-        // This MUST be the v3 API, as requested in your docs
         const domain = 'https://projectsapi.zoho.com';
         const apiUrl = `${domain}/api/v3/portal/${portalId}/projects/${projectId}`;
         
-        console.log(`[SERVER LOG] handleGetProjectDetails: Calling GET: ${apiUrl}`);
-
         const response = await axios.get(apiUrl, {
             headers: { 'Authorization': `Zoho-oauthtoken ${access_token}` }
         });
         
-        console.log(`[SERVER LOG] handleGetProjectDetails: Success. Emitting data for project: ${response.data.name}`);
         socket.emit('projectsProjectDetailsResult', { 
             success: true, 
             data: response.data,
@@ -524,7 +510,6 @@ const handleGetProjectDetails = async (socket, data) => {
 
     } catch (error) {
         const { message, fullResponse } = parseError(error);
-        console.error('[SERVER LOG] handleGetProjectDetails: CRITICAL ERROR', message, fullResponse);
         socket.emit('projectsProjectDetailsError', { 
             success: false, 
             error: message,
@@ -533,35 +518,23 @@ const handleGetProjectDetails = async (socket, data) => {
     }
 };
 
-// --- *** NEW FUNCTION 2: Update Project Details (for v3 API) *** ---
-
-// --- ADD THIS NEW FUNCTION TO THE END OF YOUR FILE ---
-
-// --- NEW FUNCTION: Update Project Details (for v3 API) ---
 const handleUpdateProjectDetails = async (socket, data) => {
-    // This function uses a manual axios call to the 'api/v3' endpoint
-    // so it does not conflict with 'makeApiCall'
     console.log('[SERVER LOG] handleUpdateProjectDetails: Triggered with data:', data);
-    const { activeProfile, portalId, projectId, payload } = data; // payload should be { "name": "new-name" }
+    const { activeProfile, portalId, projectId, payload } = data; 
 
     if (!portalId || !projectId || !payload) {
-        console.error('[SERVER LOG] handleUpdateProjectDetails: Aborting. Portal ID, Project ID, or payload is missing.');
         return socket.emit('projectsUpdateProjectError', { success: false, error: 'Portal ID, Project ID, or payload is missing.' });
     }
 
     try {
         const { access_token } = await getValidAccessToken(activeProfile, 'projects');
-        // This MUST be the v3 API, as requested in your docs
         const domain = 'https://projectsapi.zoho.com';
         const apiUrl = `${domain}/api/v3/portal/${portalId}/projects/${projectId}`;
         
-        console.log(`[SERVER LOG] handleUpdateProjectDetails: Calling PATCH: ${apiUrl} with payload:`, payload);
-
         const response = await axios.patch(apiUrl, payload, {
             headers: { 'Authorization': `Zoho-oauthtoken ${access_token}` }
         });
         
-        console.log(`[SERVER LOG] handleUpdateProjectDetails: Success. Emitting data for project: ${response.data.name}`);
         socket.emit('projectsUpdateProjectResult', { 
             success: true, 
             data: response.data,
@@ -569,7 +542,6 @@ const handleUpdateProjectDetails = async (socket, data) => {
 
     } catch (error) {
         const { message, fullResponse } = parseError(error);
-        console.error('[SERVER LOG] handleUpdateProjectDetails: CRITICAL ERROR', message, fullResponse);
         socket.emit('projectsUpdateProjectError', { 
             success: false, 
             error: message,
@@ -577,10 +549,6 @@ const handleUpdateProjectDetails = async (socket, data) => {
         });
     }
 };
-// --- END OF NEW FUNCTION ---
-
-// --- *** END OF NEW FUNCTIONS *** ---
-
 
 module.exports = {
     setActiveJobs,
@@ -592,5 +560,5 @@ module.exports = {
     handleStartBulkCreateTasks,
     handleGetTaskLayout,
     handleUpdateProjectDetails,
-    handleGetProjectDetails: require('./projects-handler').handleGetProjectDetails // Ensure all exports are kept
+    handleGetProjectDetails
 };

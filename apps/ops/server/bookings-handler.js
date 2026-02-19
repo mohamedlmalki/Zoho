@@ -1,6 +1,7 @@
 // --- FILE: server/bookings-handler.js ---
 
-const { makeApiCall, parseError, createJobId } = require('./utils');
+// 🔹 Import logToWorker
+const { makeApiCall, parseError, createJobId, logToWorker } = require('./utils');
 
 let activeJobs = {};
 
@@ -82,13 +83,11 @@ const handleDeleteBookingService = async (socket, { serviceId, selectedProfileNa
     try {
         const params = new URLSearchParams();
         params.append('id', serviceId);
-        // Also send service_id just in case, as some Zoho versions vary
         params.append('service_id', serviceId);
 
         const response = await makeApiCall('post', '/deleteservice', params, activeProfile, 'bookings');
         const result = response.data;
         if (result.response && result.response.status === 'success') {
-            // Even if returnvalue is missing, status success means it worked
             socket.emit('deleteBookingServiceResult', { success: true, message: "Service deleted." });
         } else {
             let errMsg = result.response?.message || "Unknown error";
@@ -193,7 +192,8 @@ const handleStartBulkBooking = async (socket, data) => {
                 params.append('customer_details', customerDetails);
 
                 try {
-                    const response = await makeApiCall('post', '/appointment', params, activeProfile, 'bookings');
+                    // 🔹 SKIP WORKER LOG HERE (last arg: true)
+                    const response = await makeApiCall('post', '/appointment', params, activeProfile, 'bookings', {}, null, true);
                     const result = response.data;
 
                     const isOuterSuccess = result.response && result.response.status === 'success';
@@ -208,6 +208,10 @@ const handleStartBulkBooking = async (socket, data) => {
                                 bookingId = result.response.returnvalue; 
                             }
                         }
+                        
+                        // 🔹 MANUALLY LOG SUCCESS ONLY ONCE
+                        logToWorker('bookings', 'POST', 'https://www.zohoapis.com/bookings/v1/json/appointment', 200, params, null);
+
                         socket.emit('bookingResult', { email, success: true, time: formattedTime, details: `ID: ${bookingId}`, fullResponse: result, profileName: selectedProfileName });
                         booked = true; 
                     } else {
@@ -233,7 +237,7 @@ const handleStartBulkBooking = async (socket, data) => {
                     failureCount++;
                     const { message, fullResponse } = parseError(error);
                     socket.emit('bookingResult', { email, success: false, time: formattedTime, error: message, fullResponse: fullResponse || error.response?.data, profileName: selectedProfileName });
-                    booked = true; 
+                    booked = true; // Exit loop on critical error (not slot error)
                 }
                 
                 if (!booked) await new Promise(r => setTimeout(r, 200)); 
@@ -252,7 +256,7 @@ const handleStartBulkBooking = async (socket, data) => {
     }
 };
 
-// --- 6. FETCH APPOINTMENTS (PAGINATION FIX) ---
+// --- 6. FETCH APPOINTMENTS ---
 const handleFetchAppointments = async (socket, data) => {
     const { fromDate, toDate, status, activeProfile } = data;
     console.log(`[Bookings] Fetching ALL appointments for ${activeProfile.profileName}...`);
@@ -368,7 +372,7 @@ const handleUpdateAppointmentStatus = async (socket, data) => {
     }
 };
 
-// --- 8. BULK UPDATE APPOINTMENT STATUS (OPTIMIZED) ---
+// --- 8. BULK UPDATE APPOINTMENT STATUS ---
 const handleBulkUpdateAppointmentStatus = async (socket, data) => {
     const { bookingIds, action, activeProfile } = data;
     console.log(`[Bookings] Bulk Updating ${bookingIds.length} appointments to ${action} (Optimized)...`);
@@ -380,13 +384,11 @@ const handleBulkUpdateAppointmentStatus = async (socket, data) => {
         let failCount = 0;
         const successfulIds = [];
         
-        // --- BATCH PROCESSING (5 Concurrent Requests) ---
         const BATCH_SIZE = 5;
 
         for (let i = 0; i < bookingIds.length; i += BATCH_SIZE) {
             const batch = bookingIds.slice(i, i + BATCH_SIZE);
             
-            // Execute batch in parallel
             await Promise.all(batch.map(async (bookingId) => {
                 try {
                     const params = new URLSearchParams();
@@ -398,7 +400,7 @@ const handleBulkUpdateAppointmentStatus = async (socket, data) => {
 
                     if (result.response && result.response.status === 'success') {
                         successCount++;
-                        successfulIds.push(bookingId); // Track success
+                        successfulIds.push(bookingId); 
                     } else {
                         failCount++;
                         console.warn(`[Bookings] Failed to update ${bookingId}:`, result.response?.message);
@@ -409,7 +411,6 @@ const handleBulkUpdateAppointmentStatus = async (socket, data) => {
                 }
             }));
 
-            // Progress Update
             const processedCount = Math.min(i + BATCH_SIZE, bookingIds.length);
             const progress = Math.round((processedCount / bookingIds.length) * 100);
             
@@ -419,7 +420,6 @@ const handleBulkUpdateAppointmentStatus = async (socket, data) => {
                 total: bookingIds.length 
             });
 
-            // Small delay between batches to respect rate limits
             if (i + BATCH_SIZE < bookingIds.length) {
                 await new Promise(r => setTimeout(r, 500)); 
             }
@@ -429,8 +429,8 @@ const handleBulkUpdateAppointmentStatus = async (socket, data) => {
             success: true,
             message: `Bulk Action Complete. Success: ${successCount}, Failed: ${failCount}`,
             updatedCount: successCount,
-            successfulIds: successfulIds, // Send successful IDs back for optimistic UI update
-            action: action // Send action back so frontend knows what status to set
+            successfulIds: successfulIds, 
+            action: action 
         });
 
     } catch (error) {

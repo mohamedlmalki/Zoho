@@ -1,3 +1,5 @@
+// --- FILE: apps/ops/server/utils.js ---
+
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -72,13 +74,24 @@ function extractDetails(service, data, logExtras) {
     if (!data) return "No Data Payload";
     if (data instanceof FormData) return "📦 FormData Payload (File Upload)";
     
-    // Normalize Data
     let cleanData = data;
     if (data instanceof URLSearchParams) {
         cleanData = Object.fromEntries(data);
     } else if (data.data) {
         cleanData = data.data; 
     }
+
+    // Unpack inner JSON strings (Bookings/People)
+    const jsonKeys = ['inputData', 'customer_details', 'data'];
+    jsonKeys.forEach(key => {
+        if (cleanData && cleanData[key] && typeof cleanData[key] === 'string') {
+            try {
+                const inner = JSON.parse(cleanData[key]);
+                cleanData = { ...cleanData, ...inner };
+                delete cleanData[key];
+            } catch (e) {}
+        }
+    });
 
     if (Array.isArray(cleanData)) {
         if (cleanData.length === 0) return "Empty Data Array";
@@ -91,62 +104,100 @@ function extractDetails(service, data, logExtras) {
         return foundKey ? obj[foundKey] : null;
     };
 
-    // --- 🔹 UPDATED QNTRL LOGIC: Dynamic Fields with Labels ---
-    if (service === 'qntrl') {
-        const ignoredKeys = ['layout_id', 'auth_token', 'authtoken', 'scope'];
+    if (service === 'desk') {
+        const subject = get(cleanData, 'subject');
+        if (subject) {
+            const email = get(cleanData, 'email') || (cleanData.contact ? get(cleanData.contact, 'email') : "No Email");
+            let desc = get(cleanData, 'description') || "";
+            if (desc.length > 50) desc = desc.substring(0, 50) + "...";
+            return `🎫 Ticket: ${subject} | 📧 ${email}${desc ? ' | 📝 ' + desc : ''}`;
+        }
+        const content = get(cleanData, 'content');
+        if (content) {
+            const cleanContent = content.replace(/<[^>]*>?/gm, '').substring(0, 40);
+            return `💬 Desk Reply: ${cleanContent}...`;
+        }
+        const status = get(cleanData, 'status');
+        if (status) return `🔄 Desk Status: ${status}`;
+        const keys = Object.keys(cleanData).join(', ');
+        return keys.length > 0 ? `⚙️ Desk Operation: ${keys}` : `⚙️ Desk Operation (No Data)`;
+    }
 
+    if (service === 'bookings') {
+        if (cleanData.cost || cleanData.duration) return `🛠️ Service: ${get(cleanData, 'name')} (${get(cleanData, 'duration')}min)`;
+        const name = get(cleanData, 'name') || get(cleanData, 'customer_name');
+        const email = get(cleanData, 'email') || get(cleanData, 'customer_email');
+        const time = get(cleanData, 'from_time') || get(cleanData, 'startTime');
+        if (name || email) return `📅 Booking: ${name || 'Unknown'} | 📧 ${email || 'No Email'}${time ? ' | ⏰ ' + time : ''}`;
+        return `📅 Booking API: ${Object.keys(cleanData).join(', ')}`;
+    }
+
+    // --- 🔹 UPDATED: Added 'people' to this list ---
+    if (['qntrl', 'projects', 'creator', 'people'].includes(service)) {
+        const ignoredKeys = ['layout_id', 'auth_token', 'authtoken', 'scope', 'tasklist', 'tasklist_id', 'form_link_name', 'inputData', 'recordId'];
+        
         const details = Object.entries(cleanData)
             .filter(([key, value]) => !ignoredKeys.includes(key) && value) 
             .map(([key, value]) => {
-                // Try exact match first, then lowercase match
                 let label = null;
-                if (logExtras) {
-                     label = logExtras[key] || logExtras[key.toLowerCase()];
-                     // Debug missing keys
-                     if (!label) {
-                         // console.log(`[LOG DEBUG] Key "${key}" not found in Map.`);
-                     }
-                }
-                
-                // Format: Label (api_name): value
-                if (label) {
-                    return `${label}: ${value}`;
-                }
-                // Fallback: api_name: value
+                if (logExtras) label = logExtras[key] || logExtras[key.toLowerCase()];
+                if (typeof value === 'object') return null; 
+                if (label) return `${label}: ${value}`;
                 return `${key}: ${value}`;
             })
+            .filter(Boolean)
             .join(' | ');
+        
+        let prefix = "Unknown";
+        if (service === 'projects') prefix = "✅ Task";
+        if (service === 'qntrl') prefix = "📇 Qntrl Job";
+        if (service === 'creator') prefix = "📝 Creator Record"; 
+        if (service === 'people') prefix = "👥 People Record"; // New Prefix
 
-        return `📇 Qntrl Job: ${details || "Unknown Job"}`;
+        return `${prefix}: ${details || "Unknown"}`;
     }
-    // ---------------------------------------------
 
     if (service === 'fsm') {
         const name = get(cleanData, 'last_name') || get(cleanData, 'lastname') || get(cleanData, 'contactName') || get(cleanData, 'name') || "Unknown Name";
         const email = get(cleanData, 'email') || get(cleanData, 'secondaryEmail') || "No Email";
         return `👤 Contact: ${name} | 📧 ${email}`;
     }
-    if (service === 'desk') {
-        const subject = get(cleanData, 'subject') || "No Subject";
-        const email = get(cleanData, 'email') || (cleanData.contact ? get(cleanData.contact, 'email') : "No Email");
-        return `🎫 Ticket: ${subject} | 📧 ${email}`;
-    }
-    if (service === 'projects') {
-        const taskName = get(cleanData, 'name') || get(cleanData, 'task_name');
-        return `✅ Task: ${taskName || "Unknown Task"}`;
-    }
-    if (service === 'people') {
-        const fName = get(cleanData, 'firstName') || "Unknown";
-        return `👥 Employee: ${fName}`;
-    }
-    if (service === 'bookings') {
-        return `📅 Booking: ${get(cleanData, 'customer_name')} | 📧 ${get(cleanData, 'customer_email')}`;
-    }
+
     return `Payload Keys: ${Object.keys(cleanData).join(', ')}`;
 }
 
-// --- UPDATED makeApiCall to accept logExtras ---
-const makeApiCall = async (method, relativeUrl, data, profile, service, queryParams = {}, logExtras = null) => {
+const logToWorker = (service, method, fullUrl, status, data, logExtras = null) => {
+    const summary = extractDetails(service, data, logExtras);
+    
+    let logBody = data;
+    if (data instanceof FormData) {
+        logBody = { info: "FormData Object (Hidden)" };
+    } else if (data instanceof URLSearchParams) {
+        logBody = Object.fromEntries(data);
+        const jsonKeys = ['inputData', 'customer_details', 'data'];
+        jsonKeys.forEach(key => {
+            if (logBody[key] && typeof logBody[key] === 'string') {
+                try {
+                    const inner = JSON.parse(logBody[key]);
+                    logBody = { ...logBody, ...inner };
+                    delete logBody[key];
+                } catch(e) {}
+            }
+        });
+    }
+
+    const logEntry = {
+        source: `zoho-${service}`,
+        method: method.toUpperCase(),
+        path: fullUrl,
+        status: status,
+        body: logBody, 
+        summary: summary 
+    };
+    axios.post(WORKER_URL, logEntry).catch(() => {});
+};
+
+const makeApiCall = async (method, relativeUrl, data, profile, service, queryParams = {}, logExtras = null, skipWorkerLog = false) => {
     const tokenResponse = await getValidAccessToken(profile, service);
     const accessToken = tokenResponse.access_token;
     
@@ -181,50 +232,23 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
 
     const axiosConfig = { method, url: fullUrl, data: requestData, headers, params: queryParams };
 
-    // --- 🔴 DEBUG LOGS ---
     console.log(`\n>>> 🚀 SENDING [${service.toUpperCase()}] REQUEST >>>`);
     console.log(`URL: ${method.toUpperCase()} ${fullUrl}`);
-    // console.log("HEADERS:", JSON.stringify(headers, (k,v) => k=='Authorization' ? '***' : v, 2));
     
-    if (logExtras && Object.keys(logExtras).length > 0) {
-        // console.log("LOG EXTRAS (Field Map) Loaded:", Object.keys(logExtras).length, "keys.");
-    }
-
     const isWriteAction = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
     
     try {
         const response = await axios(axiosConfig);
 
-        if (isWriteAction) {
-            // --- PASS logExtras HERE ---
-            const summary = extractDetails(service, data, logExtras);
-            
-            let logBody = data;
-            if (data instanceof FormData) {
-                logBody = { info: "FormData Object (Hidden)" };
-            } else if (data instanceof URLSearchParams) {
-                logBody = Object.fromEntries(data);
-            }
-
-            const logEntry = {
-                source: `zoho-${service}`,
-                method: method.toUpperCase(),
-                path: fullUrl,
-                status: response.status,
-                body: logBody, 
-                summary: summary 
-            };
-            axios.post(WORKER_URL, logEntry).catch(() => {});
+        if (isWriteAction && !skipWorkerLog) {
+            logToWorker(service, method, fullUrl, response.status, data, logExtras);
         }
         return response;
 
     } catch (error) {
         let logBody = data;
-        if (data instanceof FormData) {
-            logBody = "FormData";
-        } else if (data instanceof URLSearchParams) {
-            logBody = Object.fromEntries(data);
-        }
+        if (data instanceof FormData) logBody = "FormData";
+        else if (data instanceof URLSearchParams) logBody = Object.fromEntries(data);
 
         const errorLog = {
             source: `zoho-${service}-error`,
@@ -242,5 +266,5 @@ const makeApiCall = async (method, relativeUrl, data, profile, service, queryPar
 
 module.exports = {
     readProfiles, writeProfiles, readTicketLog, writeToTicketLog,
-    createJobId, parseError, getValidAccessToken, makeApiCall
+    createJobId, parseError, getValidAccessToken, makeApiCall, logToWorker
 };
