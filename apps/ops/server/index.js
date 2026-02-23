@@ -16,6 +16,7 @@ const projectsHandler = require('./projects-handler');
 const meetingHandler = require('./meeting-handler');
 const fsmHandler = require('./fsm-handler'); 
 const bookingsHandler = require('./bookings-handler'); 
+const analyticsService = require('./analytics-service'); // Renamed import
 require('dotenv').config();
 
 // --- 🔴 PASTE YOUR WORKER URL HERE 🔴 ---
@@ -526,6 +527,19 @@ io.on('connection', (socket) => {
             socket.emit('bulkUpdateAppointmentResult', { success: false, error: "Profile not found." });
         }
     });
+	socket.on('syncSystemMetrics', (data) => {
+    analyticsService.captureMetrics(socket, data);
+});
+
+socket.on('enableAutoSync', (data) => {
+    const interval = data.interval || 10;
+    analyticsService.initSync(interval);
+});
+
+socket.on('disableAutoSync', () => {
+    analyticsService.haltSync();
+});
+
 });
 
 server.listen(PORT, () => {
