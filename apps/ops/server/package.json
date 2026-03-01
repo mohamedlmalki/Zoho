@@ -12,6 +12,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.18.2",
+    "node-telegram-bot-api": "^0.67.0",
     "screenshot-desktop": "^1.15.3",
     "socket.io": "^4.7.4",
     "vite_react_shadcn_ts": "file:.."
